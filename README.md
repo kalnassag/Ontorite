@@ -2,9 +2,9 @@
 
 **A browser-based OWL 2 ontology editor that keeps properties nested under their domain classes — the way knowledge engineers actually think.**
 
-Protégé, WebVOWL, and PoolParty all display properties as a flat list disconnected from the classes they describe. Ontorite fixes that: every class shows the properties it is the `rdfs:domain` of, directly beneath it. Everything runs in the browser. No server, no sign-up, no installation.
+Protégé, WebVOWL, and PoolParty all display properties as a flat list disconnected from the classes they describe. Ontorite fixes that by making every class show the properties it is the `rdfs:domain` of, directly beneath it. Everything runs in the browser and saves on your machine without the need for servers, or sign-ups.
 
-<!-- screenshot: app overview showing three-panel layout -->
+<img width="1715" height="1201" alt="Screenshot 2026-05-18 at 10 06 51 am" src="https://github.com/user-attachments/assets/0d76364f-34ef-486c-963f-701c6cc523b1" />
 
 ---
 
