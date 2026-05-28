@@ -1,6 +1,57 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+build/
+
+# Vite
 .vite/
-*.local
-.DS_Store
+
+# TypeScript
 *.tsbuildinfo
+
+# Environment variables
+.env
+.env.*
+.env.local
+.env.*.local
+
+# Claude Code local settings (machine-specific permissions/paths)
+.claude/settings.local.json
+.claude/settings.local.*.json
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# R (stray history file)
+.Rhistory
+.Rdata
+.Ruserdata
