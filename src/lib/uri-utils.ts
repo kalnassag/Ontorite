@@ -29,6 +29,7 @@ export function namespace(uri: string): string {
 
 /** Compact a full URI to prefixed form using a prefix map. Returns <uri> if no prefix matches. */
 export function compact(uri: string, prefixes: Record<string, string>): string {
+  if (uri.startsWith("_:")) return uri; // blank node — never wrap in angle brackets
   for (const [prefix, ns] of Object.entries(prefixes)) {
     if (uri.startsWith(ns)) {
       const local = uri.slice(ns.length);

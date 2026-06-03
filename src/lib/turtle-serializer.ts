@@ -5,6 +5,11 @@
 import type { Ontology, OntologyClass, OntologyProperty, LangString, Individual } from "../types";
 import { compact, STANDARD_PREFIXES } from "./uri-utils";
 
+const RDF_FIRST   = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
+const RDF_REST    = "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest";
+const RDF_NIL     = "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil";
+const OWL_UNION   = "http://www.w3.org/2002/07/owl#unionOf";
+
 export function serializeToTurtle(ontology: Ontology): string {
   const lines: string[] = [];
   const prefixes = { ...STANDARD_PREFIXES, ...ontology.metadata.prefixes };
@@ -46,6 +51,56 @@ export function serializeToTurtle(ontology: Ontology): string {
     return blockLines;
   };
 
+  // ── RDF list reconstruction ────────────────────────────────────────────────
+  // Build a map of list-head blank node → ordered member URIs from unmapped triples.
+  // This lets us reconstruct owl:unionOf ( A B ) collection syntax on write.
+  const firstMap = new Map<string, string>(); // list-node URI → rdf:first value
+  const restMap  = new Map<string, string>(); // list-node URI → rdf:rest value
+  for (const t of ontology.unmappedTriples) {
+    if (!t.isLiteral) {
+      if (t.predicate === RDF_FIRST) firstMap.set(t.subject, t.object);
+      if (t.predicate === RDF_REST)  restMap.set(t.subject, t.object);
+    }
+  }
+  // All blank nodes that are list cells — skip them in the unmapped-triples section
+  const listNodes = new Set<string>([...firstMap.keys(), ...restMap.keys()]);
+
+  const resolveList = (head: string): string[] | null => {
+    if (!firstMap.has(head)) return null;
+    const members: string[] = [];
+    const seen = new Set<string>();
+    let cur = head;
+    while (cur !== RDF_NIL) {
+      if (seen.has(cur)) break; // cycle guard
+      seen.add(cur);
+      const member = firstMap.get(cur);
+      if (member === undefined) break;
+      members.push(member);
+      cur = restMap.get(cur) ?? RDF_NIL;
+    }
+    return members.length > 0 ? members : null;
+  };
+
+  // Serialize any URI reference, inlining blank-node union-class expressions.
+  // e.g.  _:b0 (which is [ owl:unionOf ( A B ) ])  →  "[ owl:unionOf ( A B ) ]"
+  const serializeRef = (uri: string): string => {
+    if (uri.startsWith("_:")) {
+      const bnClass = ontology.classes.find((cls) => cls.uri === uri);
+      if (bnClass) {
+        const unionEt = bnClass.extraTriples.find(
+          (et) => !et.isLiteral && et.predicate === OWL_UNION
+        );
+        if (unionEt) {
+          const members = resolveList(unionEt.object);
+          if (members && members.length > 0) {
+            return `[ owl:unionOf ( ${members.map(c).join(" ")} ) ]`;
+          }
+        }
+      }
+    }
+    return c(uri);
+  };
+
   // ── 1. @prefix declarations ─────────────────────────────────────────────
   for (const [prefix, uri] of Object.entries(prefixes).sort(([a], [b]) => a.localeCompare(b))) {
     lines.push(`@prefix ${prefix}: <${uri}> .`);
@@ -74,6 +129,7 @@ export function serializeToTurtle(ontology: Ontology): string {
     lines.push("# ── Classes ─────────────────────────────────────────────────────────────");
     lines.push("");
     for (const cls of sortedClasses) {
+      if (cls.uri.startsWith("_:")) continue; // anonymous class expression — inlined at point of use
       serializeClass(cls);
     }
   }
@@ -113,13 +169,20 @@ export function serializeToTurtle(ontology: Ontology): string {
   }
 
   // ── 6. Unmapped triples ───────────────────────────────────────────────────
-  if (ontology.unmappedTriples.length > 0) {
+  const visibleUnmapped = ontology.unmappedTriples.filter(
+    (t) => !listNodes.has(t.subject) // list-cell triples are rendered inline as ( A B )
+  );
+  if (visibleUnmapped.length > 0) {
     lines.push("# ── Preserved triples ────────────────────────────────────────────────────");
     lines.push("");
-    for (const t of ontology.unmappedTriples) {
-      const obj = t.isLiteral
-        ? typedLit(t.object, t.datatype, t.lang)
-        : c(t.object);
+    for (const t of visibleUnmapped) {
+      let obj: string;
+      if (t.isLiteral) {
+        obj = typedLit(t.object, t.datatype, t.lang);
+      } else {
+        const members = resolveList(t.object);
+        obj = members ? `( ${members.map(c).join(" ")} )` : c(t.object);
+      }
       lines.push(`${c(t.subject)} ${c(t.predicate)} ${obj} .`);
     }
     lines.push("");
@@ -131,9 +194,14 @@ export function serializeToTurtle(ontology: Ontology): string {
 
   function serializeExtraTriples(extras: Array<{ predicate: string; object: string; isLiteral: boolean; lang?: string; datatype?: string }>, pairs: Array<[string, string]>) {
     for (const et of extras) {
-      const obj = et.isLiteral
-        ? typedLit(et.object, et.datatype, et.lang)
-        : c(et.object);
+      let obj: string;
+      if (et.isLiteral) {
+        obj = typedLit(et.object, et.datatype, et.lang);
+      } else {
+        // If the object is a list head, emit as a Turtle collection ( A B … )
+        const members = resolveList(et.object);
+        obj = members ? `( ${members.map(c).join(" ")} )` : serializeRef(et.object);
+      }
       pairs.push([c(et.predicate), obj]);
     }
   }
@@ -147,10 +215,10 @@ export function serializeToTurtle(ontology: Ontology): string {
       pairs.push(["rdfs:comment", langLit(desc)]);
     }
     for (const parentUri of cls.subClassOf) {
-      pairs.push(["rdfs:subClassOf", c(parentUri)]);
+      pairs.push(["rdfs:subClassOf", serializeRef(parentUri)]);
     }
     for (const disjUri of cls.disjointWith ?? []) {
-      pairs.push(["owl:disjointWith", c(disjUri)]);
+      pairs.push(["owl:disjointWith", serializeRef(disjUri)]);
     }
     for (const r of cls.restrictions ?? []) {
        const rPairs: string[] = [];
@@ -187,9 +255,9 @@ export function serializeToTurtle(ontology: Ontology): string {
     for (const desc of prop.descriptions.filter((d) => d.value)) {
       pairs.push(["rdfs:comment", langLit(desc)]);
     }
-    if (prop.domainUri) pairs.push(["rdfs:domain", c(prop.domainUri)]);
+    if (prop.domainUri) pairs.push(["rdfs:domain", serializeRef(prop.domainUri)]);
     for (const rangeUri of prop.ranges ?? []) {
-      pairs.push(["rdfs:range", c(rangeUri)]);
+      pairs.push(["rdfs:range", serializeRef(rangeUri)]);
     }
     for (const parentUri of prop.subPropertyOf) {
       pairs.push(["rdfs:subPropertyOf", c(parentUri)]);

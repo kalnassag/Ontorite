@@ -91,21 +91,19 @@ export default function ImportExport() {
       {/* Save button */}
       <button
         onClick={handleSave}
-        className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
+        className="rounded p-1 text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
         title={linked ? "Save to file (Ctrl+S)" : "Save as… (Ctrl+S)"}
       >
-        <Save size={13} />
-        {linked ? "Save" : "Save as…"}
+        <Save size={14} />
       </button>
 
       {/* Export download */}
       <button
         onClick={handleExport}
-        className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
-        title="Download as .ttl"
+        className="rounded p-1 text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
+        title="Export as .ttl download"
       >
-        <Download size={13} />
-        Export
+        <Download size={14} />
       </button>
     </div>
   );

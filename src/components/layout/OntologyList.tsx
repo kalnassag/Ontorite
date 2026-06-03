@@ -115,38 +115,34 @@ export default function OntologyList() {
   return (
     <div className="flex h-full flex-col">
       {/* Action bar */}
-      <div className="flex items-center gap-1 border-b border-th-border-muted px-2 py-2">
+      <div className="flex items-center gap-0.5 border-b border-th-border-muted px-2 py-2">
         <button
           onClick={() => setCreating((c) => !c)}
-          className="flex items-center gap-1 rounded px-2 py-1 text-2xs text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
+          className="rounded p-1.5 text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
           title="New ontology"
         >
-          <Plus size={12} />
-          New
+          <Plus size={13} />
         </button>
         <button
           onClick={handleImport}
-          className="flex items-center gap-1 rounded px-2 py-1 text-2xs text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
+          className="rounded p-1.5 text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
           title="Import .ttl file"
         >
-          <Upload size={12} />
-          Import
+          <Upload size={13} />
         </button>
         <button
           onClick={() => { setShowLibrary((v) => !v); setImportingUrl(false); }}
-          className="flex items-center gap-1 rounded px-2 py-1 text-2xs text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
+          className="rounded p-1.5 text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
           title="Common ontology library"
         >
-          <BookOpen size={12} />
-          Library
+          <BookOpen size={13} />
         </button>
         <button
           onClick={() => { setImportingUrl((v) => !v); setUrlError(""); }}
-          className="flex items-center gap-1 rounded px-2 py-1 text-2xs text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
+          className="rounded p-1.5 text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
           title="Import from URL"
         >
-          <Globe size={12} />
-          URL
+          <Globe size={13} />
         </button>
         <input
           ref={fileRef}

@@ -16,7 +16,7 @@ type Token =
   | { type: "IRI"; value: string; line: number }
   | { type: "PREFIXED"; prefix: string; local: string; line: number }
   | { type: "LITERAL"; value: string; lang?: string; datatypeRaw?: string; line: number }
-  | { type: "PUNCT"; value: "." | ";" | "," | "[" | "]"; line: number }
+  | { type: "PUNCT"; value: "." | ";" | "," | "[" | "]" | "(" | ")"; line: number }
   | { type: "AT_KW"; keyword: "prefix" | "base"; line: number }
   | { type: "BARE"; keyword: string; line: number };
 
@@ -199,6 +199,10 @@ function tokenize(input: string): { tokens: Token[]; errors: ParseError[] } {
       advance();
       tokens.push({ type: "PUNCT", value: ch as "[" | "]", line: startLine });
 
+    } else if (ch === "(" || ch === ")") {
+      advance();
+      tokens.push({ type: "PUNCT", value: ch as "(" | ")", line: startLine });
+
     } else if (ch === "_" && peek(1) === ":") {
       advance(); advance(); // consume '_:'
       let label = "";
@@ -259,8 +263,20 @@ export function parseTurtle(input: string): ParseResult {
   let baseUri = "";
   const triples: ParsedTriple[] = [];
   const errors: ParseError[] = [...tokErrors];
-  let blankNodeCount = 0;
+  const blankNodeCount = 0;
+
+  // Start counter above the max explicit _:bN label used in the source to avoid collisions
   let bnodeCounter = 0;
+  for (const tok of tokens) {
+    if (tok.type === "BARE" && /^_:b\d+$/.test(tok.keyword)) {
+      const n = parseInt(tok.keyword.slice(3), 10);
+      if (n >= bnodeCounter) bnodeCounter = n + 1;
+    }
+  }
+
+  const RDF_FIRST = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
+  const RDF_REST  = "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest";
+  const RDF_NIL   = "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil";
 
   const generateBNode = () => "_:b" + (bnodeCounter++);
 
@@ -289,6 +305,37 @@ export function parseTurtle(input: string): ParseResult {
       if (ns) return ns + local;
     }
     return raw;
+  };
+
+  // Parse a Turtle collection ( A B C ) into an RDF list (rdf:first/rdf:rest chain).
+  // The opening '(' has already been consumed. Returns the head blank node URI,
+  // or rdf:nil for an empty collection.
+  const parseCollection = (): string => {
+    const members: string[] = [];
+    while (!stream.done()) {
+      const tok = stream.peek()!;
+      if (tok.type === "PUNCT" && tok.value === ")") { stream.next(); break; }
+      stream.next();
+      if (tok.type === "PUNCT" && tok.value === "(") {
+        members.push(parseCollection());
+      } else if (tok.type === "PUNCT" && tok.value === "[") {
+        const bn = generateBNode();
+        parsePropertyList(bn, "]");
+        members.push(bn);
+      } else if (tok.type === "LITERAL") {
+        // Literals in collections are uncommon in OWL but valid RDF — skip for now
+      } else {
+        const member = resolveNode(tok);
+        if (member !== null) members.push(member);
+      }
+    }
+    if (members.length === 0) return RDF_NIL;
+    const bnodes = members.map(() => generateBNode());
+    for (let i = 0; i < members.length; i++) {
+      triples.push({ s: bnodes[i]!, p: RDF_FIRST, o: members[i]!, isLiteral: false });
+      triples.push({ s: bnodes[i]!, p: RDF_REST, o: i + 1 < bnodes.length ? bnodes[i + 1]! : RDF_NIL, isLiteral: false });
+    }
+    return bnodes[0]!;
   };
 
   const parsePropertyList = (subject: string, endToken: "]" | ".") => {
@@ -346,6 +393,9 @@ export function parseTurtle(input: string): ParseResult {
           const bnode = generateBNode();
           triples.push({ s: subject, p: predicate, o: bnode, isLiteral: false });
           parsePropertyList(bnode, "]");
+        } else if (objTok.type === "PUNCT" && objTok.value === "(") {
+          const listHead = parseCollection();
+          triples.push({ s: subject, p: predicate, o: listHead, isLiteral: false });
         } else {
           const object = resolveNode(objTok);
           if (object !== null) {

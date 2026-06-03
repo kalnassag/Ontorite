@@ -271,7 +271,7 @@ export default function App() {
         {activeOntology ? (
           <>
             {/* Top bar */}
-            <div className="flex items-center gap-3 border-b border-th-border px-4 py-2">
+            <div className="flex items-center gap-2 border-b border-th-border px-4 py-2">
               <div className="min-w-0 flex-1">
                 <h2 className="truncate text-sm font-semibold text-th-fg">
                   {activeOntology.metadata.ontologyLabel}
@@ -287,7 +287,7 @@ export default function App() {
                 placeholder={viewMode === "individuals" ? "Filter individuals…" : "Filter classes…"}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-48 rounded bg-th-input px-2 py-1 text-xs text-th-fg placeholder-th-fg-4 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-40 rounded bg-th-input px-2 py-1 text-xs text-th-fg placeholder-th-fg-4 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
 
               {/* Class browser toggle */}
@@ -374,11 +374,10 @@ export default function App() {
               {viewMode !== "graph" && viewMode !== "entity-graph" && viewMode !== "diff" && (
                 <button
                   onClick={toggleExpandAll}
-                  className="flex items-center gap-1 rounded px-2 py-1 text-2xs text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
+                  className="rounded p-1 text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
                   title={allExpanded ? "Collapse all" : "Expand all"}
                 >
                   {allExpanded ? <ChevronsUp size={13} /> : <ChevronsDown size={13} />}
-                  {allExpanded ? "Collapse" : "Expand"}
                 </button>
               )}
 
@@ -429,10 +428,11 @@ export default function App() {
               {unassignedCount > 0 && (
                 <button
                   onClick={() => unassignedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                  className="flex items-center gap-1 rounded px-2 py-1 text-2xs text-amber-500 hover:bg-th-hover"
-                  title="Scroll to unassigned properties"
+                  className="flex items-center gap-1 rounded px-1.5 py-1 text-2xs text-amber-500 hover:bg-th-hover"
+                  title={`${unassignedCount} unassigned properties — click to scroll`}
                 >
-                  ⚠ {unassignedCount} unassigned
+                  <AlertTriangle size={12} />
+                  {unassignedCount}
                 </button>
               )}
 
