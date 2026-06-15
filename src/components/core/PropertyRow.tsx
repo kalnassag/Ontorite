@@ -4,10 +4,11 @@
  */
 
 import { useState } from "react";
-import { Pencil, Trash2, Clipboard } from "lucide-react";
+import { Pencil, Trash2, Clipboard, StickyNote } from "lucide-react";
 import { useStore } from "../../lib/store";
 import { compact } from "../../lib/uri-utils";
 import PropertyForm from "../forms/PropertyForm";
+import EditorialNotesDrawer from "../dialogs/EditorialNotesDrawer";
 import type { OntologyProperty } from "../../types";
 
 interface Props {
@@ -24,12 +25,15 @@ const TYPE_BADGE: Record<OntologyProperty["type"], { label: string; className: s
 export default function PropertyRow({ property, onDelete }: Props) {
   const deleteProperty = useStore((s) => s.deleteProperty);
   const copyProperty = useStore((s) => s.copyProperty);
+  const updateProperty = useStore((s) => s.updateProperty);
   const activeOntology = useStore((s) => s.ontologies.find(o => o.id === s.activeOntologyId));
   const [editing, setEditing] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
 
   const prefixes = activeOntology?.metadata.prefixes ?? {};
   const badge = TYPE_BADGE[property.type];
   const primaryLabel = property.labels[0]?.value || property.localName;
+  const noteCount = (property.editorialNotes ?? []).filter((n) => n.value).length;
   const rangeLabel = (property.ranges ?? []).length > 0
     ? (property.ranges ?? []).map((r) => compact(r, prefixes)).join(", ")
     : null;
@@ -93,6 +97,18 @@ export default function PropertyRow({ property, onDelete }: Props) {
       {/* Actions (shown on hover) */}
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
         <button
+          onClick={() => setShowNotes(true)}
+          className={`relative rounded p-1 hover:text-amber-400 ${noteCount > 0 ? "text-amber-500 opacity-100" : "text-th-fg-4"}`}
+          title={noteCount > 0 ? `${noteCount} editorial note${noteCount === 1 ? "" : "s"}` : "Editorial notes"}
+        >
+          <StickyNote size={11} />
+          {noteCount > 0 && (
+            <span className="absolute -right-1 -top-1 rounded-full bg-amber-500 px-1 text-[8px] font-bold leading-tight text-white">
+              {noteCount}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => copyProperty(property.id)}
           className="rounded p-1 text-th-fg-4 hover:text-purple-400"
           title="Copy property"
@@ -114,6 +130,15 @@ export default function PropertyRow({ property, onDelete }: Props) {
           <Trash2 size={11} />
         </button>
       </div>
+
+      <EditorialNotesDrawer
+        open={showNotes}
+        onClose={() => setShowNotes(false)}
+        entityKind="property"
+        entityLabel={primaryLabel}
+        notes={property.editorialNotes ?? []}
+        onChange={(notes) => updateProperty(property.id, { editorialNotes: notes })}
+      />
     </div>
   );
 }

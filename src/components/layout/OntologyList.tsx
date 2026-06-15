@@ -20,6 +20,7 @@ export default function OntologyList() {
   const createOntology = useStore((s) => s.createOntology);
   const deleteOntology = useStore((s) => s.deleteOntology);
   const importOntology = useStore((s) => s.importOntology);
+  const importOntologyAsync = useStore((s) => s.importOntologyAsync);
   const importOntologyWithHandle = useStore((s) => s.importOntologyWithHandle);
 
   // Import warnings have been moved to the main panel in App.tsx
@@ -71,11 +72,11 @@ export default function OntologyList() {
     setUrlError("");
     setUrlLoading(true);
     try {
-      const response = await fetch(url, { headers: { Accept: "text/turtle, text/n3, application/x-turtle, */*" } });
+      const response = await fetch(url, { headers: { Accept: "text/turtle, application/ld+json, application/rdf+xml, application/n-triples, */*" } });
       if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
       const text = await response.text();
       const fileName = url.split("/").pop() || "imported.ttl";
-      importOntology(text, fileName);
+      await importOntologyAsync(text, fileName);
       setUrlValue("");
       setImportingUrl(false);
     } catch (err) {
@@ -90,11 +91,11 @@ export default function OntologyList() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
         const text = ev.target?.result;
         if (typeof text === "string") {
-          const id = importOntology(text, file.name);
+          const id = await importOntologyAsync(text, file.name);
           if (import.meta.env.DEV) console.log("[import] success (no file handle), ontology id:", id);
         } else {
           console.error("[import] FileReader result was not a string");
@@ -147,7 +148,7 @@ export default function OntologyList() {
         <input
           ref={fileRef}
           type="file"
-          accept=".ttl,.n3,.turtle"
+          accept=".ttl,.n3,.turtle,.jsonld,.json,.rdf,.xml,.owl,.nt"
           className="hidden"
           onChange={handleFileInputChange}
         />
@@ -286,7 +287,14 @@ export default function OntologyList() {
                   className={`flex-shrink-0 ${onto.id === activeOntologyId ? "text-blue-400" : "text-th-fg-4"}`}
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-xs">{onto.metadata.ontologyLabel || "Untitled"}</div>
+                  <div className="flex items-center gap-1 truncate text-xs">
+                    <span className="truncate">{onto.metadata.ontologyLabel || "Untitled"}</span>
+                    {onto.metadata.versionInfo && (
+                      <span className="flex-shrink-0 rounded bg-th-input px-1 font-mono text-2xs text-th-fg-3">
+                        v{onto.metadata.versionInfo}
+                      </span>
+                    )}
+                  </div>
                   <div className="truncate font-mono text-2xs text-th-fg-4">
                     {onto.metadata.baseUri}
                   </div>

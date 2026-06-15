@@ -6,6 +6,7 @@
  */
 
 import { Plus, X } from "lucide-react";
+import VocabAutocomplete from "./VocabAutocomplete";
 import type { ExtraTriple } from "../../types";
 
 interface Props {
@@ -30,14 +31,17 @@ export default function ExtraTripleEditor({ values, onChange }: Props) {
     <div className="space-y-1">
       {values.map((entry, i) => (
         <div key={i} className="flex items-start gap-1">
-          {/* Predicate */}
-          <input
-            type="text"
-            value={entry.predicate}
-            onChange={(e) => update(i, { predicate: e.target.value })}
-            placeholder="prov:wasQuotedFrom"
-            className="w-40 rounded bg-th-input px-2 py-1 font-mono text-xs text-th-fg placeholder-th-fg-4 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+          {/* Predicate (autocompletes against well-known vocabulary properties) */}
+          <div className="w-40">
+            <VocabAutocomplete
+              value={entry.predicate}
+              onChange={(val) => update(i, { predicate: val })}
+              filter={{ kinds: ["property"] }}
+              placeholder="prov:wasQuotedFrom"
+              outputAs="compact"
+              className="font-mono"
+            />
+          </div>
           {/* Object */}
           <input
             type="text"

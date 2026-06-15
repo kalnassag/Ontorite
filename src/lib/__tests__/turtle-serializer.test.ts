@@ -31,6 +31,70 @@ describe('Turtle Serializer', () => {
   });
 });
 
+describe('Editorial notes + version round-trip', () => {
+  const turtle = `
+    @prefix owl:  <http://www.w3.org/2002/07/owl#> .
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+    @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+    @prefix ex:   <http://example.org/> .
+
+    ex:MyOntology a owl:Ontology ;
+      rdfs:label "Test" ;
+      owl:versionIRI <http://example.org/v1> ;
+      owl:versionInfo "1.0.0" ;
+      skos:editorialNote "Ontology-level review needed."@en .
+
+    ex:Dog a owl:Class ;
+      rdfs:label "Dog"@en ;
+      skos:editorialNote "Subclass of Animal?"@en ;
+      skos:editorialNote "Reviewed."@en .
+
+    ex:barks a owl:DatatypeProperty ;
+      rdfs:label "barks"@en ;
+      rdfs:domain ex:Dog ;
+      rdfs:range <http://www.w3.org/2001/XMLSchema#boolean> ;
+      skos:editorialNote "Should this allow lang variants?"@en .
+  `;
+
+  it('parses version + editorialNote into the typed fields, not unmappedTriples', () => {
+    const parsed = parseTurtle(turtle);
+    const model = buildModelFromTriples(parsed);
+    expect(model.metadata.versionIRI).toBe('http://example.org/v1');
+    expect(model.metadata.versionInfo).toBe('1.0.0');
+    expect(model.metadata.editorialNotes).toHaveLength(1);
+    expect(model.metadata.editorialNotes[0]!.value).toBe('Ontology-level review needed.');
+
+    const dog = model.classes.find((c) => c.localName === 'Dog')!;
+    expect(dog.editorialNotes).toHaveLength(2);
+    expect(dog.editorialNotes.map((n) => n.value)).toContain('Reviewed.');
+    expect(dog.extraTriples.some((e) => e.predicate.includes('editorialNote'))).toBe(false);
+
+    const barks = model.properties.find((p) => p.localName === 'barks')!;
+    expect(barks.editorialNotes).toHaveLength(1);
+  });
+
+  it('round-trips without duplicating editorialNote / version triples', () => {
+    const parsed1 = parseTurtle(turtle);
+    const model1 = buildModelFromTriples(parsed1);
+    const ontology1 = { ...model1, id: 'test', createdAt: '', updatedAt: '' } as any;
+    const serialized = serializeToTurtle(ontology1);
+
+    // Each editorialNote line should appear exactly once per source occurrence
+    const editorialMatches = serialized.match(/skos:editorialNote/g) ?? [];
+    expect(editorialMatches.length).toBe(4); // 1 ontology + 2 class + 1 property
+    expect(serialized.match(/owl:versionIRI/g)).toHaveLength(1);
+    expect(serialized.match(/owl:versionInfo/g)).toHaveLength(1);
+
+    // Re-parse must preserve everything
+    const parsed2 = parseTurtle(serialized);
+    const model2 = buildModelFromTriples(parsed2);
+    expect(model2.metadata.versionIRI).toBe('http://example.org/v1');
+    expect(model2.metadata.versionInfo).toBe('1.0.0');
+    const dog2 = model2.classes.find((c) => c.localName === 'Dog')!;
+    expect(dog2.editorialNotes).toHaveLength(2);
+  });
+});
+
 describe('owl:unionOf collection round-trip', () => {
   const turtle = `
     @prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .

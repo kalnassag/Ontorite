@@ -347,6 +347,42 @@ export default function EntityGraph() {
     const s = getNodePos(edge.source);
     const t = getNodePos(edge.target);
 
+    // ── Self-loop branch (e.g. :alice :knows :alice) ──────────────────
+    if (edge.source === edge.target) {
+      const r = 26; // approximate node radius used in renderNode
+      const loopR = 22;
+      const phi = Math.PI / 7;
+      const ax = s.x + r * Math.cos(-phi);
+      const ay = s.y + r * Math.sin(-phi);
+      const bx = s.x + r * Math.cos(phi);
+      const by = s.y + r * Math.sin(phi);
+      const lx = s.x + r + loopR * 1.8;
+      const ly = s.y;
+      return (
+        <g key={`edge-${index}`}>
+          <path
+            d={`M ${ax} ${ay} A ${loopR} ${loopR} 0 1 1 ${bx} ${by}`}
+            fill="none"
+            stroke="#6366f1"
+            strokeWidth={1.5}
+            markerEnd="url(#arrow-entity)"
+            opacity={0.7}
+          />
+          <text
+            x={lx}
+            y={ly + 2}
+            textAnchor="middle"
+            fill="#6366f1"
+            fontSize={9}
+            fontFamily="IBM Plex Sans, sans-serif"
+            opacity={0.9}
+          >
+            {edge.label}
+          </text>
+        </g>
+      );
+    }
+
     // Offset parallel edges
     const parallels = edges.filter(
       (e) =>

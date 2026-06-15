@@ -7,6 +7,7 @@ import { useStore } from "../../lib/store";
 import { toPascalCase, compact, expand, buildUri } from "../../lib/uri-utils";
 import LabelEditor from "./LabelEditor";
 import ExtraTripleEditor from "./ExtraTripleEditor";
+import VocabAutocomplete, { type LocalSuggestion } from "./VocabAutocomplete";
 import type { OntologyClass, LangString, ExtraTriple } from "../../types";
 
 interface Props {
@@ -251,16 +252,22 @@ export default function ClassForm({ existing, onDone }: Props) {
                     })}
                   </div>
                 )}
-                <select
+                <VocabAutocomplete
                   value=""
-                  onChange={(e) => { if (e.target.value) toggleParent(e.target.value); }}
-                  className="w-full rounded bg-th-input px-2 py-1 text-xs text-th-fg focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="">+ Add parent class…</option>
-                  {parentOptions.filter((c) => !subClassOf.includes(c.uri)).map((cls) => (
-                    <option key={cls.id} value={cls.uri}>{cls.labels[0]?.value || cls.localName}</option>
-                  ))}
-                </select>
+                  onChange={(val) => {
+                    if (val && !subClassOf.includes(val)) toggleParent(val);
+                  }}
+                  filter={{ kinds: ["class"] }}
+                  localEntries={parentOptions
+                    .filter((c) => !subClassOf.includes(c.uri))
+                    .map((c): LocalSuggestion => ({
+                      uri: c.uri,
+                      localName: c.localName,
+                      label: c.labels[0]?.value ?? c.localName,
+                      kind: "class",
+                    }))}
+                  placeholder="Add parent class (type to search)…"
+                />
               </div>
             )}
           </div>

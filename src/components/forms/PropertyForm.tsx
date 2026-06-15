@@ -7,6 +7,7 @@ import { useStore } from "../../lib/store";
 import { toCamelCase, XSD_TYPES, compact, expand, buildUri } from "../../lib/uri-utils";
 import LabelEditor from "./LabelEditor";
 import ExtraTripleEditor from "./ExtraTripleEditor";
+import VocabAutocomplete, { type LocalSuggestion } from "./VocabAutocomplete";
 import type { OntologyProperty, LangString, PropertyType, ExtraTriple } from "../../types";
 
 interface Props {
@@ -257,7 +258,6 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
 
         {propType === "owl:ObjectProperty" ? (
           <div className="space-y-1.5">
-            {/* Selected chips */}
             {ranges.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {ranges.map((uri) => {
@@ -278,31 +278,30 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
                 })}
               </div>
             )}
-            {/* Dropdown to add more */}
-            <select
-              value=""
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val && !ranges.includes(val)) setRanges((prev) => [...prev, val]);
+            <VocabAutocomplete
+              value={rangeInput}
+              onChange={(val) => {
+                if (val && !ranges.includes(val) && val !== rangeInput) {
+                  setRanges((prev) => [...prev, val]);
+                  setRangeInput("");
+                } else {
+                  setRangeInput(val);
+                }
               }}
-              className="w-full rounded bg-th-input px-2 py-1 text-xs text-th-fg focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">+ Add class range…</option>
-              {allClasses
-                .filter((cls) => !ranges.includes(cls.uri))
-                .map((cls) => (
-                  <option key={cls.id} value={cls.uri}>
-                    {cls.labels[0]?.value || cls.localName}
-                  </option>
-                ))}
-            </select>
-            {ranges.some((r) => !allClasses.find((c) => c.uri === r)) && (
-              <p className="text-2xs text-amber-500">Some ranges are not known classes — will save as external references.</p>
-            )}
+              filter={{ kinds: ["class"] }}
+              localEntries={allClasses
+                .filter((c) => !ranges.includes(c.uri))
+                .map((c): LocalSuggestion => ({
+                  uri: c.uri,
+                  localName: c.localName,
+                  label: c.labels[0]?.value ?? c.localName,
+                  kind: "class",
+                }))}
+              placeholder="Add class range (type to search)…"
+            />
           </div>
         ) : propType === "owl:DatatypeProperty" ? (
           <div className="space-y-1.5">
-            {/* Selected chips */}
             {ranges.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {ranges.map((uri) => {
@@ -323,24 +322,21 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
                 })}
               </div>
             )}
-            <select
-              value=""
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val && !ranges.includes(val)) setRanges((prev) => [...prev, val]);
+            <VocabAutocomplete
+              value={rangeInput}
+              onChange={(val) => {
+                if (val && !ranges.includes(val) && val !== rangeInput) {
+                  setRanges((prev) => [...prev, val]);
+                  setRangeInput("");
+                } else {
+                  setRangeInput(val);
+                }
               }}
-              className="w-full rounded bg-th-input px-2 py-1 text-xs text-th-fg focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">+ Add XSD type…</option>
-              {Object.entries(XSD_TYPES)
-                .filter(([, full]) => !ranges.includes(full))
-                .map(([compacted, full]) => (
-                  <option key={full} value={full}>{compacted}</option>
-                ))}
-            </select>
+              filter={{ kinds: ["datatype"] }}
+              placeholder="Add XSD type (type to search)…"
+            />
           </div>
         ) : (
-          /* Annotation: free-text multi-input */
           <div className="space-y-1.5">
             {ranges.length > 0 && (
               <div className="flex flex-wrap gap-1">
@@ -358,30 +354,24 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
                 ))}
               </div>
             )}
-            <div className="flex gap-1">
-              <input
-                type="text"
-                value={rangeInput}
-                onChange={(e) => setRangeInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && rangeInput.trim()) {
-                    const val = rangeInput.trim();
-                    if (!ranges.includes(val)) setRanges((prev) => [...prev, val]);
-                    setRangeInput("");
-                    e.preventDefault();
-                  }
-                }}
-                placeholder="URI or free text, press Enter to add"
-                className="flex-1 rounded bg-th-input px-2 py-1 text-xs text-th-fg placeholder-th-fg-4 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-              <button
-                onClick={() => {
-                  const val = rangeInput.trim();
-                  if (val && !ranges.includes(val)) { setRanges((prev) => [...prev, val]); setRangeInput(""); }
-                }}
-                className="rounded bg-th-hover px-2 text-xs text-th-fg-2 hover:bg-th-border"
-              >Add</button>
-            </div>
+            <VocabAutocomplete
+              value={rangeInput}
+              onChange={(val) => {
+                if (val && !ranges.includes(val) && val !== rangeInput) {
+                  setRanges((prev) => [...prev, val]);
+                  setRangeInput("");
+                } else {
+                  setRangeInput(val);
+                }
+              }}
+              localEntries={allClasses.map((c): LocalSuggestion => ({
+                uri: c.uri,
+                localName: c.localName,
+                label: c.labels[0]?.value ?? c.localName,
+                kind: "class",
+              }))}
+              placeholder="URI or free text, press Enter to add"
+            />
           </div>
         )}
       </div>

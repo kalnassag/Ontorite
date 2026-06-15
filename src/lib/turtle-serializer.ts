@@ -5,10 +5,13 @@
 import type { Ontology, OntologyClass, OntologyProperty, LangString, Individual } from "../types";
 import { compact, STANDARD_PREFIXES } from "./uri-utils";
 
-const RDF_FIRST   = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
-const RDF_REST    = "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest";
-const RDF_NIL     = "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil";
-const OWL_UNION   = "http://www.w3.org/2002/07/owl#unionOf";
+const RDF_FIRST       = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
+const RDF_REST        = "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest";
+const RDF_NIL         = "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil";
+const OWL_UNION       = "http://www.w3.org/2002/07/owl#unionOf";
+const OWL_VERSION_IRI  = "http://www.w3.org/2002/07/owl#versionIRI";
+const OWL_VERSION_INFO = "http://www.w3.org/2002/07/owl#versionInfo";
+const SKOS_EDITORIAL  = "http://www.w3.org/2004/02/skos/core#editorialNote";
 
 export function serializeToTurtle(ontology: Ontology): string {
   const lines: string[] = [];
@@ -108,11 +111,17 @@ export function serializeToTurtle(ontology: Ontology): string {
   lines.push("");
 
   // ── 2. owl:Ontology declaration ─────────────────────────────────────────
-  const { ontologyUri, ontologyLabel, ontologyComment } = ontology.metadata;
+  const { ontologyUri, ontologyLabel, ontologyComment, versionIRI, versionInfo } = ontology.metadata;
+  const ontoEditorialNotes = ontology.metadata.editorialNotes ?? [];
   if (ontologyUri) {
     const ontoPairs: Array<[string, string]> = [["a", "owl:Ontology"]];
     if (ontologyLabel) ontoPairs.push(["rdfs:label", `"${escLit(ontologyLabel)}"`]);
     if (ontologyComment) ontoPairs.push(["rdfs:comment", `"${escLit(ontologyComment)}"`]);
+    if (versionIRI) ontoPairs.push(["owl:versionIRI", c(versionIRI)]);
+    if (versionInfo) ontoPairs.push(["owl:versionInfo", `"${escLit(versionInfo)}"`]);
+    for (const note of ontoEditorialNotes.filter((n) => n.value)) {
+      ontoPairs.push(["skos:editorialNote", langLit(note)]);
+    }
     const ontoBlock = buildBlock(ontoPairs);
     lines.push(`${c(ontologyUri)} ${ontoBlock[0]!}`);
     for (let i = 1; i < ontoBlock.length; i++) lines.push(ontoBlock[i]!);
@@ -169,9 +178,18 @@ export function serializeToTurtle(ontology: Ontology): string {
   }
 
   // ── 6. Unmapped triples ───────────────────────────────────────────────────
-  const visibleUnmapped = ontology.unmappedTriples.filter(
-    (t) => !listNodes.has(t.subject) // list-cell triples are rendered inline as ( A B )
-  );
+  // Filter out anything that's now emitted from a dedicated typed field, so we
+  // never produce duplicates from migrated or freshly-imported ontologies.
+  const visibleUnmapped = ontology.unmappedTriples.filter((t) => {
+    if (listNodes.has(t.subject)) return false; // list cells inlined above
+    if (t.predicate === SKOS_EDITORIAL) return false;
+    if (
+      ontology.metadata.ontologyUri &&
+      t.subject === ontology.metadata.ontologyUri &&
+      (t.predicate === OWL_VERSION_IRI || t.predicate === OWL_VERSION_INFO)
+    ) return false;
+    return true;
+  });
   if (visibleUnmapped.length > 0) {
     lines.push("# ── Preserved triples ────────────────────────────────────────────────────");
     lines.push("");
@@ -194,6 +212,8 @@ export function serializeToTurtle(ontology: Ontology): string {
 
   function serializeExtraTriples(extras: Array<{ predicate: string; object: string; isLiteral: boolean; lang?: string; datatype?: string }>, pairs: Array<[string, string]>) {
     for (const et of extras) {
+      // Predicates emitted from dedicated typed fields are filtered to prevent duplicates
+      if (et.predicate === SKOS_EDITORIAL) continue;
       let obj: string;
       if (et.isLiteral) {
         obj = typedLit(et.object, et.datatype, et.lang);
@@ -213,6 +233,9 @@ export function serializeToTurtle(ontology: Ontology): string {
     }
     for (const desc of cls.descriptions.filter((d) => d.value)) {
       pairs.push(["rdfs:comment", langLit(desc)]);
+    }
+    for (const note of (cls.editorialNotes ?? []).filter((n) => n.value)) {
+      pairs.push(["skos:editorialNote", langLit(note)]);
     }
     for (const parentUri of cls.subClassOf) {
       pairs.push(["rdfs:subClassOf", serializeRef(parentUri)]);
@@ -255,6 +278,9 @@ export function serializeToTurtle(ontology: Ontology): string {
     for (const desc of prop.descriptions.filter((d) => d.value)) {
       pairs.push(["rdfs:comment", langLit(desc)]);
     }
+    for (const note of (prop.editorialNotes ?? []).filter((n) => n.value)) {
+      pairs.push(["skos:editorialNote", langLit(note)]);
+    }
     if (prop.domainUri) pairs.push(["rdfs:domain", serializeRef(prop.domainUri)]);
     for (const rangeUri of prop.ranges ?? []) {
       pairs.push(["rdfs:range", serializeRef(rangeUri)]);
@@ -292,6 +318,9 @@ export function serializeToTurtle(ontology: Ontology): string {
         ? typedLit(pv.value, pv.datatype, pv.lang)
         : c(pv.value);
       pairs.push([pred, obj]);
+    }
+    for (const note of (ind.editorialNotes ?? []).filter((n) => n.value)) {
+      pairs.push(["skos:editorialNote", langLit(note)]);
     }
     if (pairs.length === 0) return;
     const block = buildBlock(pairs);

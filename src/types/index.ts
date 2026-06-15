@@ -36,6 +36,8 @@ export interface OntologyClass {
   uri: string; // Full URI = baseUri + localName
   labels: LangString[];
   descriptions: LangString[];
+  /** Multilingual editorial notes (skos:editorialNote) */
+  editorialNotes: LangString[];
   subClassOf: string[]; // URIs of parent classes
   disjointWith: string[]; // URIs of disjoint classes (owl:disjointWith)
   /** Logical restrictions defining this class */
@@ -52,6 +54,8 @@ export interface OntologyProperty {
   type: PropertyType;
   labels: LangString[];
   descriptions: LangString[];
+  /** Multilingual editorial notes (skos:editorialNote) */
+  editorialNotes: LangString[];
   domainUri: string; // URI of the class this property belongs to (rdfs:domain)
   ranges: string[]; // One or more range URIs (rdfs:range); was single string in v1
   subPropertyOf: string[]; // URIs of parent properties
@@ -71,6 +75,12 @@ export interface OntologyMetadata {
   ontologyUri: string; // The owl:Ontology subject URI
   ontologyLabel: string;
   ontologyComment: string;
+  /** owl:versionIRI — full IRI identifying this specific version */
+  versionIRI: string;
+  /** owl:versionInfo — human-readable version string (e.g. "1.2.0") */
+  versionInfo: string;
+  /** Multilingual editorial notes on the ontology itself (skos:editorialNote) */
+  editorialNotes: LangString[];
   prefixes: Record<string, string>; // prefix → URI
   defaultLanguage: string; // Default lang tag for new labels (user pref, not auto-applied)
 }
@@ -93,6 +103,8 @@ export interface Individual {
   typeUris: string[];
   /** All property assertions on this individual */
   propertyValues: IndividualPropertyValue[];
+  /** Multilingual editorial notes (skos:editorialNote) */
+  editorialNotes: LangString[];
 }
 
 /** A triple that the parser found but the model doesn't explicitly support */

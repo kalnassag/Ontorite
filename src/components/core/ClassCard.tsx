@@ -6,7 +6,8 @@ import PropertyRow from './PropertyRow';
 import ClassForm from '../forms/ClassForm';
 import PropertyForm from '../forms/PropertyForm';
 import type { OntologyClass, OntologyProperty } from "../../types";
-import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, Clipboard } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, Clipboard, StickyNote } from 'lucide-react';
+import EditorialNotesDrawer from '../dialogs/EditorialNotesDrawer';
 
 interface Props {
   cls: OntologyClass;
@@ -41,6 +42,7 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
   const copyClass = useStore((s) => s.copyClass);
   const pasteClipboard = useStore((s) => s.pasteClipboard);
   const clipboard = useStore((s) => s.clipboard);
+  const updateClass = useStore((s) => s.updateClass);
   // E2: Use stable inline selector instead of getActiveOntology()
   const activeOntology = useStore((s) => s.ontologies.find(o => o.id === s.activeOntologyId));
 
@@ -49,8 +51,11 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [editingClass, setEditingClass] = useState(false);
   const [addingProperty, setAddingProperty] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
   // E9: Warn before deleting a class with properties
   const [pendingDelete, setPendingDelete] = useState(false);
+
+  const noteCount = (cls.editorialNotes ?? []).filter((n) => n.value).length;
 
   useEffect(() => {
     if (!highlighted || !cardRef.current) return;
@@ -163,6 +168,18 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
               <Plus size={13} />
             </button>
             <button
+              onClick={() => setShowNotes(true)}
+              className={`relative rounded p-1 hover:text-amber-400 ${noteCount > 0 ? "text-amber-500" : "text-th-fg-4"}`}
+              title={noteCount > 0 ? `${noteCount} editorial note${noteCount === 1 ? "" : "s"}` : "Editorial notes"}
+            >
+              <StickyNote size={12} />
+              {noteCount > 0 && (
+                <span className="absolute -right-1 -top-1 rounded-full bg-amber-500 px-1 text-[8px] font-bold leading-tight text-white">
+                  {noteCount}
+                </span>
+              )}
+            </button>
+            <button
               onClick={() => copyClass(cls.id)}
               className="rounded p-1 text-th-fg-4 hover:text-purple-400"
               title={`Copy class${properties.length > 0 ? ` + ${properties.length} propert${properties.length === 1 ? 'y' : 'ies'}` : ''}`}
@@ -192,6 +209,15 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
           </div>
         </div>
       </div>
+
+      <EditorialNotesDrawer
+        open={showNotes}
+        onClose={() => setShowNotes(false)}
+        entityKind="class"
+        entityLabel={primaryLabel}
+        notes={cls.editorialNotes ?? []}
+        onChange={(notes) => updateClass(cls.id, { editorialNotes: notes })}
+      />
 
       {/* E9: Inline delete confirmation when class has properties */}
       {pendingDelete && (

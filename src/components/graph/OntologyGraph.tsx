@@ -331,9 +331,17 @@ export default function OntologyGraph({ onClose }: Props) {
     simLinksRef.current = links;
     nodeMapRef.current  = newMap;
 
+    // Self-loops collapse under d3-force (zero-length edges), so keep them out
+    // of the simulation and render them purely from node position + radius.
+    const simLinks = links.filter((l) => {
+      const s = typeof l.source === "object" ? (l.source as SimNode).id : l.source;
+      const t = typeof l.target === "object" ? (l.target as SimNode).id : l.target;
+      return s !== t;
+    });
+
     const sim = forceSimulation<SimNode>(allNodes)
       .force("charge",  forceManyBody<SimNode>().strength(baseRepulsion).distanceMax(distanceMax))
-      .force("link",    d3ForceLink<SimNode, D3Link>(links)
+      .force("link",    d3ForceLink<SimNode, D3Link>(simLinks)
         .id((d) => d.id)
         .distance((l) => {
           // Drastically increased base distances to prevent edge labels overlapping
@@ -543,7 +551,59 @@ export default function OntologyGraph({ onClose }: Props) {
 
     const sx = srcNode.x ?? 0, sy = srcNode.y ?? 0;
     const tx = tgtNode.x ?? 0, ty = tgtNode.y ?? 0;
-    if (srcNode.id === tgtNode.id) return null;
+
+    // ── Self-loop: a property whose domain == range ──────────────────
+    // d3-force collapses these to zero length, so we draw a small arc
+    // anchored on the right side of the node and skip force-link entirely.
+    if (srcNode.id === tgtNode.id && srcNode.kind === "class") {
+      const r = classR(srcNode);
+      const loopR = 24;
+      // Two anchor points on the node perimeter, slightly above/below the right edge.
+      const phi = Math.PI / 7;
+      const ax = sx + r * Math.cos(-phi);
+      const ay = sy + r * Math.sin(-phi);
+      const bx = sx + r * Math.cos(phi);
+      const by = sy + r * Math.sin(phi);
+      // Label sits at the outer apex of the loop.
+      const lx = sx + r + loopR * 1.8;
+      const ly = sy;
+
+      let lineColor: string, dash: string, boxBg: string, boxText: string, mEnd: string;
+      switch (link.type) {
+        case "subClassOf":          lineColor = V.subLine;    dash = "none"; boxBg = "transparent"; boxText = V.subLine;    mEnd = "url(#arr-sub)";   break;
+        case "objectProperty":      lineColor = V.obj.line;   dash = "none"; boxBg = V.obj.box;     boxText = V.obj.text;   mEnd = "url(#arr-obj)";   break;
+        case "datatypeProperty":    lineColor = V.dtype.line; dash = "6,3"; boxBg = V.dtype.box;   boxText = V.dtype.text; mEnd = "url(#arr-dtype)"; break;
+        case "annotationProperty":  lineColor = V.annot.line; dash = "2,4"; boxBg = V.annot.box;   boxText = V.annot.text; mEnd = "url(#arr-annot)"; break;
+        case "inverseOf":           lineColor = V.inv.line;   dash = "none"; boxBg = V.inv.box;     boxText = V.inv.text;   mEnd = "url(#arr-inv)";   break;
+      }
+
+      const trunc = (s: string, n: number) => s.length > n ? s.slice(0, n - 1) + "…" : s;
+      const lbl = trunc(link.label, 18);
+      const bgW = lbl.length * 5.2 + 10;
+
+      return (
+        <g key={link.id} data-link-id={link.id}>
+          <path
+            d={`M ${ax} ${ay} A ${loopR} ${loopR} 0 1 1 ${bx} ${by}`}
+            fill="none" stroke="transparent" strokeWidth={18}
+          />
+          <path
+            d={`M ${ax} ${ay} A ${loopR} ${loopR} 0 1 1 ${bx} ${by}`}
+            fill="none" stroke={lineColor}
+            strokeWidth={1.8}
+            strokeDasharray={dash}
+            markerEnd={mEnd}
+            opacity={0.85}
+          />
+          {link.type !== "subClassOf" && (
+            <g>
+              <rect x={lx - bgW / 2} y={ly - 7} width={bgW} height={13} rx={3} fill={boxBg} opacity={0.93} />
+              <text x={lx} y={ly + 2} textAnchor="middle" fill={boxText} fontSize={9} fontFamily={FONT} fontWeight={500}>{lbl}</text>
+            </g>
+          )}
+        </g>
+      );
+    }
 
     // Parallel-edge offset
     const parallels = simLinksRef.current.filter((l) => {

@@ -493,6 +493,7 @@ export function parseTurtle(input: string): ParseResult {
 const OWL = "http://www.w3.org/2002/07/owl#";
 const RDF = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 const RDFS = "http://www.w3.org/2000/01/rdf-schema#";
+const SKOS = "http://www.w3.org/2004/02/skos/core#";
 
 const P = {
   type:             RDF + "type",
@@ -513,6 +514,9 @@ const P = {
   minCardinality:   OWL + "minCardinality",
   maxCardinality:   OWL + "maxCardinality",
   exactCardinality: OWL + "cardinality",
+  versionIRI:       OWL + "versionIRI",
+  versionInfo:      OWL + "versionInfo",
+  editorialNote:    SKOS + "editorialNote",
 };
 
 const genId = () => crypto.randomUUID().slice(0, 8);
@@ -574,6 +578,9 @@ export function buildModelFromTriples(parsed: ParseResult): {
   let ontologyUri = "";
   let ontologyLabel = "";
   let ontologyComment = "";
+  let versionIRI = "";
+  let versionInfo = "";
+  const ontologyEditorialNotes: import("../types").LangString[] = [];
 
   for (const [subj, type] of typeMap) {
     if (type === P.ontology) {
@@ -606,6 +613,7 @@ export function buildModelFromTriples(parsed: ParseResult): {
         uri,
         labels: [],
         descriptions: [],
+        editorialNotes: [],
         subClassOf: [],
         disjointWith: [],
         restrictions: [],
@@ -626,6 +634,7 @@ export function buildModelFromTriples(parsed: ParseResult): {
         type: propType,
         labels: [],
         descriptions: [],
+        editorialNotes: [],
         domainUri: "",
         ranges: [],
         subPropertyOf: [],
@@ -654,6 +663,7 @@ export function buildModelFromTriples(parsed: ParseResult): {
         uri,
         labels: [],
         descriptions: [],
+        editorialNotes: [],
         subClassOf: [],
         disjointWith: [],
         restrictions: [],
@@ -675,6 +685,7 @@ export function buildModelFromTriples(parsed: ParseResult): {
         uri,
         labels: [],
         descriptions: [],
+        editorialNotes: [],
         subClassOf: [],
         disjointWith: [],
         restrictions: [],
@@ -703,6 +714,7 @@ export function buildModelFromTriples(parsed: ParseResult): {
       localName: ln,
       typeUris: types,
       propertyValues: [],
+      editorialNotes: [],
     });
   }
 
@@ -737,6 +749,21 @@ export function buildModelFromTriples(parsed: ParseResult): {
         mappedTripleSet.add(idx);
         return;
       }
+      if (t.p === P.versionIRI && !t.isLiteral) {
+        if (!versionIRI) versionIRI = t.o;
+        mappedTripleSet.add(idx);
+        return;
+      }
+      if (t.p === P.versionInfo && t.isLiteral) {
+        if (!versionInfo) versionInfo = t.o;
+        mappedTripleSet.add(idx);
+        return;
+      }
+      if (t.p === P.editorialNote && t.isLiteral) {
+        ontologyEditorialNotes.push({ value: t.o, lang: t.lang ?? "" });
+        mappedTripleSet.add(idx);
+        return;
+      }
     }
 
     // Class triples
@@ -746,6 +773,8 @@ export function buildModelFromTriples(parsed: ParseResult): {
         cls.labels.push({ value: t.o, lang: t.lang ?? "" });
       } else if (t.p === P.comment && t.isLiteral) {
         cls.descriptions.push({ value: t.o, lang: t.lang ?? "" });
+      } else if (t.p === P.editorialNote && t.isLiteral) {
+        cls.editorialNotes.push({ value: t.o, lang: t.lang ?? "" });
       } else if (t.p === P.subClassOf && !t.isLiteral) {
         if (restrictionsByBNode.has(t.o)) {
           cls.restrictions.push(restrictionsByBNode.get(t.o)!);
@@ -784,6 +813,8 @@ export function buildModelFromTriples(parsed: ParseResult): {
         prop.labels.push({ value: t.o, lang: t.lang ?? "" });
       } else if (t.p === P.comment && t.isLiteral) {
         prop.descriptions.push({ value: t.o, lang: t.lang ?? "" });
+      } else if (t.p === P.editorialNote && t.isLiteral) {
+        prop.editorialNotes.push({ value: t.o, lang: t.lang ?? "" });
       } else if (t.p === P.domain && !t.isLiteral) {
         prop.domainUri = t.o;
       } else if (t.p === P.range && !t.isLiteral) {
@@ -821,6 +852,11 @@ export function buildModelFromTriples(parsed: ParseResult): {
     if (individual) {
       // rdf:type is already captured in typeUris
       if (t.p === P.type) {
+        mappedTripleSet.add(idx);
+        return;
+      }
+      if (t.p === P.editorialNote && t.isLiteral) {
+        individual.editorialNotes.push({ value: t.o, lang: t.lang ?? "" });
         mappedTripleSet.add(idx);
         return;
       }
@@ -864,6 +900,9 @@ export function buildModelFromTriples(parsed: ParseResult): {
     ontologyUri,
     ontologyLabel,
     ontologyComment,
+    versionIRI,
+    versionInfo,
+    editorialNotes: ontologyEditorialNotes,
     prefixes,
     defaultLanguage: "en",
   };

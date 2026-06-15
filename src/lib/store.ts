@@ -7,11 +7,12 @@
  */
 
 import { create } from "zustand";
-import type { Ontology, OntologyClass, OntologyMetadata, OntologyProperty, Individual, IndividualPropertyValue, ClipboardItem } from "../types";
+import type { Ontology, OntologyClass, OntologyMetadata, OntologyProperty, Individual, IndividualPropertyValue, ClipboardItem, UnmappedTriple, ExtraTriple } from "../types";
 import { loadAllOntologies, saveOntology, deleteOntology as dbDelete, debounce } from "./persistence";
 import { buildUri, toPascalCase, toCamelCase, STANDARD_PREFIXES } from "./uri-utils";
 import { parseTurtle, buildModelFromTriples } from "./turtle-parser";
 import { serializeToTurtle } from "./turtle-serializer";
+import { detectFormat, parseToTriples, serializeFromOntology, type SerializationFormat } from "./formats";
 import {
   getHandle,
   setHandle,
@@ -56,6 +57,7 @@ interface EditorState {
   init: () => Promise<void>;
   createOntology: (meta: Partial<OntologyMetadata>) => string;
   importOntology: (turtleText: string, fileName: string) => string;
+  importOntologyAsync: (text: string, fileName: string) => Promise<string>;
   importOntologyWithHandle: (
     turtleText: string,
     fileName: string,
@@ -77,7 +79,7 @@ interface EditorState {
 
   // ── Individual actions ──────────────────────────────────────────────
   addIndividual: (label: string, typeUri: string) => string;
-  updateIndividual: (id: string, patch: { localName?: string; uri?: string; typeUris?: string[] }) => void;
+  updateIndividual: (id: string, patch: Partial<Individual>) => void;
   deleteIndividual: (id: string) => void;
   updateIndividualProperty: (
     individualId: string,
@@ -89,6 +91,15 @@ interface EditorState {
     propVal: IndividualPropertyValue
   ) => void;
   removeIndividualProperty: (individualId: string, propertyIndex: number) => void;
+
+  // ── Unmapped triples ───────────────────────────────────────────────
+  updateUnmappedTriple: (index: number, patch: Partial<UnmappedTriple>) => void;
+  deleteUnmappedTriple: (index: number) => void;
+  /**
+   * Move an unmapped triple into a class/property's extraTriples. The triple's
+   * subject does not have to match the target entity's URI — the user knows best.
+   */
+  promoteUnmappedTriple: (index: number, targetEntityId: string) => void;
 
   // ── Clipboard ─────────────────────────────────────────────────────
   clipboard: ClipboardItem | null;
@@ -107,6 +118,7 @@ interface EditorState {
 
   // ── Export / Save ─────────────────────────────────────────────────
   exportTurtle: () => string;
+  exportAs: (format: SerializationFormat) => Promise<string>;
   /** Save to the original file handle. If none, opens a "Save As" picker. */
   saveToFile: () => Promise<boolean>;
 }
@@ -123,6 +135,9 @@ function newOntology(meta: Partial<OntologyMetadata>): Ontology {
       ontologyUri: baseUri,
       ontologyLabel: meta.ontologyLabel || "New Ontology",
       ontologyComment: meta.ontologyComment || "",
+      versionIRI: meta.versionIRI || "",
+      versionInfo: meta.versionInfo || "",
+      editorialNotes: meta.editorialNotes || [],
       prefixes: { ...STANDARD_PREFIXES, ...meta.prefixes },
       defaultLanguage: meta.defaultLanguage || "en",
     },
@@ -133,6 +148,67 @@ function newOntology(meta: Partial<OntologyMetadata>): Ontology {
     createdAt: now,
     updatedAt: now,
   };
+}
+
+const SKOS_EDITORIAL_NOTE = "http://www.w3.org/2004/02/skos/core#editorialNote";
+const OWL_VERSION_IRI = "http://www.w3.org/2002/07/owl#versionIRI";
+const OWL_VERSION_INFO = "http://www.w3.org/2002/07/owl#versionInfo";
+
+/**
+ * One-time migration helper: hoist legacy skos:editorialNote and
+ * owl:versionIRI/versionInfo triples out of extraTriples/unmappedTriples
+ * into the new typed fields. Safe to re-run — once the buckets no longer
+ * contain those predicates, the function is a no-op.
+ *
+ * Exported for unit tests.
+ */
+export function sweepLegacyTriples(onto: Ontology): void {
+  // Classes: move skos:editorialNote from extraTriples to editorialNotes
+  for (const cls of onto.classes) {
+    const keep: typeof cls.extraTriples = [];
+    for (const et of cls.extraTriples) {
+      if (et.predicate === SKOS_EDITORIAL_NOTE && et.isLiteral) {
+        cls.editorialNotes.push({ value: et.object, lang: et.lang ?? "" });
+      } else {
+        keep.push(et);
+      }
+    }
+    cls.extraTriples = keep;
+  }
+  // Properties: same
+  for (const prop of onto.properties) {
+    const keep: typeof prop.extraTriples = [];
+    for (const et of prop.extraTriples) {
+      if (et.predicate === SKOS_EDITORIAL_NOTE && et.isLiteral) {
+        prop.editorialNotes.push({ value: et.object, lang: et.lang ?? "" });
+      } else {
+        keep.push(et);
+      }
+    }
+    prop.extraTriples = keep;
+  }
+  // Ontology-level: sweep unmappedTriples for editorial notes / version triples
+  // whose subject is the ontology URI.
+  const ontoUri = onto.metadata.ontologyUri;
+  const keepUnmapped: typeof onto.unmappedTriples = [];
+  for (const t of onto.unmappedTriples) {
+    if (t.subject && ontoUri && t.subject === ontoUri) {
+      if (t.predicate === OWL_VERSION_IRI && !t.isLiteral) {
+        if (!onto.metadata.versionIRI) onto.metadata.versionIRI = t.object;
+        continue;
+      }
+      if (t.predicate === OWL_VERSION_INFO && t.isLiteral) {
+        if (!onto.metadata.versionInfo) onto.metadata.versionInfo = t.object;
+        continue;
+      }
+      if (t.predicate === SKOS_EDITORIAL_NOTE && t.isLiteral) {
+        onto.metadata.editorialNotes.push({ value: t.object, lang: t.lang ?? "" });
+        continue;
+      }
+    }
+    keepUnmapped.push(t);
+  }
+  onto.unmappedTriples = keepUnmapped;
 }
 
 /** Mutate the active ontology inside the ontologies array and return updated array */
@@ -269,9 +345,11 @@ export const useStore = create<EditorState>((set, get) => {
           if (!cls.disjointWith) cls.disjointWith = [];
           if (!cls.restrictions) cls.restrictions = [];
           if (!cls.extraTriples) cls.extraTriples = [];
+          if (!cls.editorialNotes) cls.editorialNotes = [];
         }
         for (const prop of onto.properties) {
           if (!prop.extraTriples) prop.extraTriples = [];
+          if (!prop.editorialNotes) prop.editorialNotes = [];
           // Migrate v1 single range string → v2 ranges array
           if (!prop.ranges) {
             const legacy = (prop as unknown as { range?: string }).range;
@@ -279,6 +357,16 @@ export const useStore = create<EditorState>((set, get) => {
           }
           // inverseOf / cardinality are optional — undefined is fine, no migration needed
         }
+        for (const ind of onto.individuals) {
+          if (!ind.editorialNotes) ind.editorialNotes = [];
+        }
+        // Default new metadata fields
+        if (onto.metadata.versionIRI === undefined) onto.metadata.versionIRI = "";
+        if (onto.metadata.versionInfo === undefined) onto.metadata.versionInfo = "";
+        if (!onto.metadata.editorialNotes) onto.metadata.editorialNotes = [];
+        // Sweep legacy storage: relocate skos:editorialNote and owl:versionIRI/versionInfo
+        // out of extraTriples / unmappedTriples into the new typed fields. Idempotent.
+        sweepLegacyTriples(onto);
       }
       set({
         ontologies,
@@ -318,6 +406,50 @@ export const useStore = create<EditorState>((set, get) => {
       };
 
       // Build user-visible warnings from parse errors and data-loss events
+      const warnings: string[] = [];
+      for (const err of parsed.errors) {
+        warnings.push(err.line ? `Line ${err.line}: ${err.message}` : err.message);
+      }
+      if (parsed.blankNodeCount > 0) {
+        warnings.push(
+          `${parsed.blankNodeCount} blank-node statement${parsed.blankNodeCount > 1 ? "s" : ""} were skipped — blank nodes are not supported in v1.`
+        );
+      }
+
+      set((s) => ({
+        ontologies: [...s.ontologies, onto],
+        activeOntologyId: onto.id,
+        importWarnings: warnings,
+      }));
+      saveOntology(onto);
+      return onto.id;
+    },
+
+    importOntologyAsync: async (text, fileName) => {
+      const format = detectFormat(fileName, text);
+      if (format === "turtle") {
+        return get().importOntology(text, fileName);
+      }
+      const parsed = await parseToTriples(text, format);
+      const model = buildModelFromTriples(parsed);
+      const now = new Date().toISOString();
+      const fallbackLabel = fileName.replace(/\.(ttl|jsonld|json|rdf|xml|owl|nt)$/i, "");
+      const onto: Ontology = {
+        id: genId(),
+        metadata: {
+          ...model.metadata,
+          ontologyLabel: model.metadata.ontologyLabel || fallbackLabel,
+          prefixes: { ...STANDARD_PREFIXES, ...model.metadata.prefixes },
+        },
+        classes: model.classes,
+        properties: model.properties,
+        individuals: model.individuals,
+        unmappedTriples: model.unmappedTriples,
+        createdAt: now,
+        updatedAt: now,
+      };
+      sweepLegacyTriples(onto);
+
       const warnings: string[] = [];
       for (const err of parsed.errors) {
         warnings.push(err.line ? `Line ${err.line}: ${err.message}` : err.message);
@@ -397,6 +529,7 @@ export const useStore = create<EditorState>((set, get) => {
         uri,
         labels: partial.labels || [{ value: label, lang: onto.metadata.defaultLanguage }],
         descriptions: partial.descriptions || [{ value: "", lang: onto.metadata.defaultLanguage }],
+        editorialNotes: partial.editorialNotes || [],
         subClassOf: partial.subClassOf || [],
         disjointWith: partial.disjointWith || [],
         restrictions: partial.restrictions || [],
@@ -489,6 +622,7 @@ export const useStore = create<EditorState>((set, get) => {
         type: partial.type || "owl:DatatypeProperty",
         labels: partial.labels || [{ value: label, lang: onto.metadata.defaultLanguage }],
         descriptions: partial.descriptions || [{ value: "", lang: onto.metadata.defaultLanguage }],
+        editorialNotes: partial.editorialNotes || [],
         domainUri: partial.domainUri || "",
         ranges: partial.ranges ?? [],
         subPropertyOf: partial.subPropertyOf || [],
@@ -572,6 +706,7 @@ export const useStore = create<EditorState>((set, get) => {
         localName: localNameVal,
         typeUris: [typeUri],
         propertyValues: [],
+        editorialNotes: [],
       };
 
       set((s) => ({
@@ -674,6 +809,78 @@ export const useStore = create<EditorState>((set, get) => {
               : ind
           ),
         })),
+      }));
+      persist();
+    },
+
+    // ── Unmapped triple actions ─────────────────────────────────────────
+    updateUnmappedTriple: (index, patch) => {
+      set((s) => ({
+        _history: [...s._history.slice(-49), s.ontologies],
+        _future: [],
+        ontologies: updateActive(s.ontologies, s.activeOntologyId, (o) => ({
+          ...o,
+          unmappedTriples: o.unmappedTriples.map((t, i) =>
+            i === index ? { ...t, ...patch } : t
+          ),
+        })),
+      }));
+      persist();
+    },
+
+    deleteUnmappedTriple: (index) => {
+      set((s) => ({
+        _history: [...s._history.slice(-49), s.ontologies],
+        _future: [],
+        ontologies: updateActive(s.ontologies, s.activeOntologyId, (o) => ({
+          ...o,
+          unmappedTriples: o.unmappedTriples.filter((_, i) => i !== index),
+        })),
+      }));
+      persist();
+    },
+
+    promoteUnmappedTriple: (index, targetEntityId) => {
+      set((s) => ({
+        _history: [...s._history.slice(-49), s.ontologies],
+        _future: [],
+        ontologies: updateActive(s.ontologies, s.activeOntologyId, (o) => {
+          const t = o.unmappedTriples[index];
+          if (!t) return o;
+          const extra: ExtraTriple = {
+            predicate: t.predicate,
+            object: t.object,
+            isLiteral: t.isLiteral,
+            lang: t.lang,
+            datatype: t.datatype,
+          };
+          const remainingUnmapped = o.unmappedTriples.filter((_, i) => i !== index);
+          const targetClass = o.classes.find((c) => c.id === targetEntityId);
+          if (targetClass) {
+            return {
+              ...o,
+              classes: o.classes.map((c) =>
+                c.id === targetEntityId
+                  ? { ...c, extraTriples: [...c.extraTriples, extra] }
+                  : c
+              ),
+              unmappedTriples: remainingUnmapped,
+            };
+          }
+          const targetProp = o.properties.find((p) => p.id === targetEntityId);
+          if (targetProp) {
+            return {
+              ...o,
+              properties: o.properties.map((p) =>
+                p.id === targetEntityId
+                  ? { ...p, extraTriples: [...p.extraTriples, extra] }
+                  : p
+              ),
+              unmappedTriples: remainingUnmapped,
+            };
+          }
+          return o;
+        }),
       }));
       persist();
     },
@@ -796,6 +1003,12 @@ export const useStore = create<EditorState>((set, get) => {
       const onto = get().getActiveOntology();
       if (!onto) return "";
       return serializeToTurtle(onto);
+    },
+
+    exportAs: async (format) => {
+      const onto = get().getActiveOntology();
+      if (!onto) return "";
+      return serializeFromOntology(onto, format);
     },
 
     saveToFile: async () => {

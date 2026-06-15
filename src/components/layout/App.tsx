@@ -9,6 +9,7 @@ import OntologyList from "./OntologyList";
 import ClassCard from "../core/ClassCard";
 import ClassForm from "../forms/ClassForm";
 import UnassignedProperties from "../core/UnassignedProperties";
+import UnmappedTriplesTable from "../core/UnmappedTriplesTable";
 import ImportExport from "../core/ImportExport";
 import OntologyGraph from "../graph/OntologyGraph";
 import EntityGraph from "../graph/EntityGraph";
@@ -24,7 +25,9 @@ import {
   Plus, Sun, Moon, Network, ChevronsDown, ChevronsUp, Layers, Users,
   ShieldCheck, Share2, PanelLeftClose, PanelLeftOpen, Clipboard, X,
   GitCompare, AlertCircle, AlertTriangle, RotateCcw, RotateCw, HelpCircle,
+  Info,
 } from "lucide-react";
+import OntologyMetadataDrawer from "../dialogs/OntologyMetadataDrawer";
 
 function useTheme() {
   const [dark, setDark] = useState(() => {
@@ -75,10 +78,12 @@ export default function App() {
   const [toast, setToast] = useState<{ message: string; action: () => void } | null>(null);
   // U9: Keyboard shortcut help overlay
   const [showHelp, setShowHelp] = useState(false);
+  const [showMetadata, setShowMetadata] = useState(false);
   const theme = useTheme();
 
   // U8: Ref for scrolling to unassigned properties
   const unassignedRef = useRef<HTMLDivElement>(null);
+  const unmappedRef = useRef<HTMLDivElement>(null);
 
   const toggleClassBrowser = useCallback(() => {
     setClassBrowserCollapsed((prev) => {
@@ -273,13 +278,25 @@ export default function App() {
             {/* Top bar */}
             <div className="flex items-center gap-2 border-b border-th-border px-4 py-2">
               <div className="min-w-0 flex-1">
-                <h2 className="truncate text-sm font-semibold text-th-fg">
-                  {activeOntology.metadata.ontologyLabel}
+                <h2 className="flex items-center gap-2 truncate text-sm font-semibold text-th-fg">
+                  <span className="truncate">{activeOntology.metadata.ontologyLabel}</span>
+                  {activeOntology.metadata.versionInfo && (
+                    <span className="rounded bg-th-input px-1.5 py-0.5 font-mono text-2xs font-normal text-th-fg-3">
+                      v{activeOntology.metadata.versionInfo}
+                    </span>
+                  )}
                 </h2>
                 <p className="truncate font-mono text-2xs text-th-fg-3">
                   {activeOntology.metadata.baseUri}
                 </p>
               </div>
+              <button
+                onClick={() => setShowMetadata(true)}
+                className="rounded p-1 text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
+                title="Ontology metadata"
+              >
+                <Info size={14} />
+              </button>
 
               {/* Search */}
               <input
@@ -553,9 +570,15 @@ export default function App() {
                       </span>
                     )}
                     {activeOntology.unmappedTriples.length > 0 && (
-                      <span className="text-amber-600">
-                        {activeOntology.unmappedTriples.length} unmapped triples preserved
-                      </span>
+                      <button
+                        onClick={() =>
+                          unmappedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+                        }
+                        className="rounded text-amber-500 hover:text-amber-400 hover:underline"
+                        title="Scroll to the unmapped-triples table"
+                      >
+                        {activeOntology.unmappedTriples.length} unmapped triples →
+                      </button>
                     )}
                   </div>
 
@@ -598,6 +621,7 @@ export default function App() {
                   <div ref={unassignedRef}>
                     <UnassignedProperties />
                   </div>
+                  <UnmappedTriplesTable ref={unmappedRef} />
                 </div>
               </div>
             )}
@@ -621,6 +645,8 @@ export default function App() {
           onDismiss={() => setToast(null)}
         />
       )}
+
+      <OntologyMetadataDrawer open={showMetadata} onClose={() => setShowMetadata(false)} />
     </div>
   );
 }

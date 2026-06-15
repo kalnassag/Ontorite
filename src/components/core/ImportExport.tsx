@@ -3,47 +3,61 @@
  *
  * - "Save" writes back to the original file (File System Access API) or
  *   triggers a "Save As" picker / download as fallback.
- * - "Export .ttl" always triggers a download.
- * - Shows a save status indicator when a file handle is active.
+ * - "Export" downloads in any of the supported formats.
  */
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { Download, Save, Check, Loader2 } from "lucide-react";
 import { useStore } from "../../lib/store";
 import { validate } from "../../lib/validation";
+import {
+  FORMAT_EXTENSION,
+  FORMAT_LABEL,
+  FORMAT_MIME,
+  type SerializationFormat,
+} from "../../lib/formats";
+
+const ALL_FORMATS: SerializationFormat[] = ["turtle", "jsonld", "rdfxml", "ntriples"];
 
 export default function ImportExport() {
-  const exportTurtle = useStore((s) => s.exportTurtle);
+  const exportAs = useStore((s) => s.exportAs);
   const saveToFile = useStore((s) => s.saveToFile);
   const activeOntology = useStore((s) => s.getActiveOntology());
   const hasFileHandle = useStore((s) => s.hasFileHandle);
   const fileSaveInProgress = useStore((s) => s.fileSaveInProgress);
   const lastFileSaveTime = useStore((s) => s.lastFileSaveTime);
 
+  const [format, setFormat] = useState<SerializationFormat>("turtle");
+  const [exporting, setExporting] = useState(false);
+
   const linked = hasFileHandle();
 
-  const handleExport = () => {
-    if (activeOntology) {
-      const issues = validate(activeOntology);
-      const errors = issues.filter((i) => i.severity === "error");
-      if (errors.length > 0) {
-        const proceed = window.confirm(
-          `This ontology has ${errors.length} validation error${errors.length > 1 ? "s" : ""}:\n\n` +
-          errors.map((e) => `• ${e.message}`).join("\n") +
-          "\n\nExport anyway?"
-        );
-        if (!proceed) return;
-      }
+  const handleExport = async () => {
+    if (!activeOntology) return;
+    const issues = validate(activeOntology);
+    const errors = issues.filter((i) => i.severity === "error");
+    if (errors.length > 0) {
+      const proceed = window.confirm(
+        `This ontology has ${errors.length} validation error${errors.length > 1 ? "s" : ""}:\n\n` +
+        errors.map((e) => `• ${e.message}`).join("\n") +
+        "\n\nExport anyway?"
+      );
+      if (!proceed) return;
     }
-    const text = exportTurtle();
-    const blob = new Blob([text], { type: "text/turtle;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    const label = activeOntology?.metadata.ontologyLabel ?? "ontology";
-    a.href = url;
-    a.download = `${label.toLowerCase().replace(/\s+/g, "-")}.ttl`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setExporting(true);
+    try {
+      const text = await exportAs(format);
+      const blob = new Blob([text], { type: `${FORMAT_MIME[format]};charset=utf-8` });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const label = activeOntology.metadata.ontologyLabel ?? "ontology";
+      a.href = url;
+      a.download = `${label.toLowerCase().replace(/\s+/g, "-")}.${FORMAT_EXTENSION[format]}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleSave = useCallback(async () => {
@@ -65,9 +79,7 @@ export default function ImportExport() {
   if (!activeOntology) return null;
 
   // Format last save time
-  const savedAgo = lastFileSaveTime
-    ? formatTimeSince(lastFileSaveTime)
-    : null;
+  const savedAgo = lastFileSaveTime ? formatTimeSince(lastFileSaveTime) : null;
 
   return (
     <div className="flex items-center gap-1.5">
@@ -97,13 +109,26 @@ export default function ImportExport() {
         <Save size={14} />
       </button>
 
+      {/* Format dropdown */}
+      <select
+        value={format}
+        onChange={(e) => setFormat(e.target.value as SerializationFormat)}
+        className="rounded bg-th-input px-1 py-0.5 text-2xs text-th-fg-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        title="Export format"
+      >
+        {ALL_FORMATS.map((f) => (
+          <option key={f} value={f}>{FORMAT_LABEL[f]}</option>
+        ))}
+      </select>
+
       {/* Export download */}
       <button
         onClick={handleExport}
-        className="rounded p-1 text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
-        title="Export as .ttl download"
+        disabled={exporting}
+        className="rounded p-1 text-th-fg-3 hover:bg-th-hover hover:text-th-fg disabled:opacity-50"
+        title={`Export as ${FORMAT_LABEL[format]}`}
       >
-        <Download size={14} />
+        {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
       </button>
     </div>
   );
