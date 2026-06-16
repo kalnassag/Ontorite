@@ -42,15 +42,19 @@ export function serializeToTurtle(ontology: Ontology): string {
     return `"${escLit(value)}"`;
   };
 
-  // Build predicate-object pairs for a subject block
-  // Returns lines of the block (not including trailing " .")
+  // Build predicate-object pairs for a subject block.
+  // Conventional Turtle style: ";" at end of each predicate line, "." closing
+  // the last one. The caller prepends the subject to blockLines[0].
   const buildBlock = (pairs: Array<[string, string]>): string[] => {
     if (pairs.length === 0) return [];
+    if (pairs.length === 1) return [`${pairs[0]![0]} ${pairs[0]![1]} .`];
     const blockLines: string[] = [];
-    blockLines.push(`${pairs[0]![0]} ${pairs[0]![1]}`);
-    for (let i = 1; i < pairs.length; i++) {
-      blockLines.push(`    ; ${pairs[i]![0]} ${pairs[i]![1]}`);
+    blockLines.push(`${pairs[0]![0]} ${pairs[0]![1]} ;`);
+    for (let i = 1; i < pairs.length - 1; i++) {
+      blockLines.push(`    ${pairs[i]![0]} ${pairs[i]![1]} ;`);
     }
+    const last = pairs[pairs.length - 1]!;
+    blockLines.push(`    ${last[0]} ${last[1]} .`);
     return blockLines;
   };
 
@@ -125,7 +129,6 @@ export function serializeToTurtle(ontology: Ontology): string {
     const ontoBlock = buildBlock(ontoPairs);
     lines.push(`${c(ontologyUri)} ${ontoBlock[0]!}`);
     for (let i = 1; i < ontoBlock.length; i++) lines.push(ontoBlock[i]!);
-    lines.push("    .");
     lines.push("");
   }
 
@@ -260,7 +263,6 @@ export function serializeToTurtle(ontology: Ontology): string {
     const block = buildBlock(pairs);
     lines.push(`${c(cls.uri)} ${block[0]!}`);
     for (let i = 1; i < block.length; i++) lines.push(block[i]!);
-    lines.push("    .");
     lines.push("");
   }
 
@@ -301,7 +303,6 @@ export function serializeToTurtle(ontology: Ontology): string {
     const block = buildBlock(pairs);
     lines.push(`${c(prop.uri)} ${block[0]!}`);
     for (let i = 1; i < block.length; i++) lines.push(block[i]!);
-    lines.push("    .");
     lines.push("");
   }
 
@@ -326,7 +327,6 @@ export function serializeToTurtle(ontology: Ontology): string {
     const block = buildBlock(pairs);
     lines.push(`${c(ind.uri)} ${block[0]!}`);
     for (let i = 1; i < block.length; i++) lines.push(block[i]!);
-    lines.push("    .");
     lines.push("");
   }
 
