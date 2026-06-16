@@ -84,7 +84,7 @@ export default function ClassDetailPane({ classId, onEditClass, onSelectClass }:
                 <div key={i} className="flex items-baseline gap-1">
                   <span className="text-th-fg">{l.value}</span>
                   {l.lang && (
-                    <span className="rounded bg-th-border px-1 text-2xs text-th-fg-4">
+                    <span className="rounded bg-th-hover px-1.5 text-2xs font-medium text-th-fg-2">
                       {l.lang}
                     </span>
                   )}
@@ -103,7 +103,7 @@ export default function ClassDetailPane({ classId, onEditClass, onSelectClass }:
                 <div key={i} className="text-th-fg-2 leading-relaxed">
                   {d.value}
                   {d.lang && (
-                    <span className="ml-1 rounded bg-th-border px-1 text-2xs text-th-fg-4">
+                    <span className="ml-1 rounded bg-th-hover px-1.5 text-2xs font-medium text-th-fg-2">
                       {d.lang}
                     </span>
                   )}

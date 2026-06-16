@@ -134,7 +134,7 @@ function TreeRow({
         </span>
 
         {propCount > 0 && (
-          <span className="ml-1 flex-shrink-0 rounded bg-th-border px-1 text-2xs text-th-fg-4">
+          <span className="ml-1 flex-shrink-0 rounded bg-th-hover px-1.5 text-2xs font-medium text-th-fg-2">
             {propCount}
           </span>
         )}
