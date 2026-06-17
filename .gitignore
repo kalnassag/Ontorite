@@ -21,6 +21,9 @@ build/
 .claude/settings.local.json
 .claude/settings.local.*.json
 
+# Private product planning docs (not for public repo)
+revision-history-roadmap.md
+
 # macOS
 .DS_Store
 .AppleDouble
