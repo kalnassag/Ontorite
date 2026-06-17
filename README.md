@@ -33,8 +33,10 @@ Protégé, WebVOWL, and PoolParty all display properties as a flat list disconne
 - **Preserved triples table** — unmapped triples kept on import (anything the model doesn't have a typed field for) are surfaced in an editable table at the bottom of the workspace. Edit subject/predicate/object inline, toggle URI/literal, delete, or promote into an entity's `extraTriples`
 
 ### Visualisation
-- **Ontology graph** — full D3 force-directed graph of all classes, properties, and their relationships. Self-referencing properties (e.g. `:Person :managerOf :Person`) render as a looped arc
+- **Ontology graph** — D3 force-directed graph of all classes, properties, and their relationships. Self-referencing properties (e.g. `:Person :managerOf :Person`) render as a looped arc
+- **Tree view** — top-down branching hierarchy of `subClassOf`, sibling of the force-directed graph. Multi-inheritance is preserved as faded dashed secondary-parent edges, so nothing is hidden
 - **Entity graph** — click any entity to see a focused neighbourhood graph centred on it. Self-loops render here too
+- **Hover a class** in any of the three graphs to see its label, URI, description, and the list of its own datatype and annotation properties with their ranges
 
 ### Comparison
 - **Ontology diff** — pick any two loaded ontologies and see exactly what was added, removed, or modified at the class and property level, with one-click merge of individual changes
@@ -97,8 +99,9 @@ Protégé, WebVOWL, and PoolParty all display properties as a flat list disconne
 <!-- screenshot: diff view -->
 
 **Visualising the schema**
-1. Switch to **Graph** for a full force-directed overview
-2. Click any node to open the **Entity graph** — a focused neighbourhood view showing only that entity's direct relationships
+1. Switch to **Graph** for a full force-directed overview, or **Tree** for a top-down branching layout of the class hierarchy
+2. Hover any class node to see its datatype and annotation properties listed inline
+3. Click any node to open the **Entity graph** — a focused neighbourhood view showing only that entity's direct relationships
 
 <!-- screenshot: ontology graph -->
 
