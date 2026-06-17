@@ -12,6 +12,8 @@ const OWL_UNION       = "http://www.w3.org/2002/07/owl#unionOf";
 const OWL_VERSION_IRI  = "http://www.w3.org/2002/07/owl#versionIRI";
 const OWL_VERSION_INFO = "http://www.w3.org/2002/07/owl#versionInfo";
 const SKOS_EDITORIAL  = "http://www.w3.org/2004/02/skos/core#editorialNote";
+const DCT_CREATED     = "http://purl.org/dc/terms/created";
+const DCT_MODIFIED    = "http://purl.org/dc/terms/modified";
 
 export function serializeToTurtle(ontology: Ontology): string {
   const lines: string[] = [];
@@ -126,6 +128,12 @@ export function serializeToTurtle(ontology: Ontology): string {
     for (const note of ontoEditorialNotes.filter((n) => n.value)) {
       ontoPairs.push(["skos:editorialNote", langLit(note)]);
     }
+    if (ontology.metadata.created) {
+      ontoPairs.push(["dcterms:created", `"${escLit(ontology.metadata.created)}"^^xsd:dateTime`]);
+    }
+    if (ontology.metadata.modified) {
+      ontoPairs.push(["dcterms:modified", `"${escLit(ontology.metadata.modified)}"^^xsd:dateTime`]);
+    }
     const ontoBlock = buildBlock(ontoPairs);
     lines.push(`${c(ontologyUri)} ${ontoBlock[0]!}`);
     for (let i = 1; i < ontoBlock.length; i++) lines.push(ontoBlock[i]!);
@@ -186,6 +194,7 @@ export function serializeToTurtle(ontology: Ontology): string {
   const visibleUnmapped = ontology.unmappedTriples.filter((t) => {
     if (listNodes.has(t.subject)) return false; // list cells inlined above
     if (t.predicate === SKOS_EDITORIAL) return false;
+    if (t.predicate === DCT_CREATED || t.predicate === DCT_MODIFIED) return false;
     if (
       ontology.metadata.ontologyUri &&
       t.subject === ontology.metadata.ontologyUri &&
@@ -217,6 +226,8 @@ export function serializeToTurtle(ontology: Ontology): string {
     for (const et of extras) {
       // Predicates emitted from dedicated typed fields are filtered to prevent duplicates
       if (et.predicate === SKOS_EDITORIAL) continue;
+      if (et.predicate === DCT_CREATED) continue;
+      if (et.predicate === DCT_MODIFIED) continue;
       let obj: string;
       if (et.isLiteral) {
         obj = typedLit(et.object, et.datatype, et.lang);
@@ -240,6 +251,8 @@ export function serializeToTurtle(ontology: Ontology): string {
     for (const note of (cls.editorialNotes ?? []).filter((n) => n.value)) {
       pairs.push(["skos:editorialNote", langLit(note)]);
     }
+    if (cls.created) pairs.push(["dcterms:created", `"${escLit(cls.created)}"^^xsd:dateTime`]);
+    if (cls.modified) pairs.push(["dcterms:modified", `"${escLit(cls.modified)}"^^xsd:dateTime`]);
     for (const parentUri of cls.subClassOf) {
       pairs.push(["rdfs:subClassOf", serializeRef(parentUri)]);
     }
@@ -283,6 +296,8 @@ export function serializeToTurtle(ontology: Ontology): string {
     for (const note of (prop.editorialNotes ?? []).filter((n) => n.value)) {
       pairs.push(["skos:editorialNote", langLit(note)]);
     }
+    if (prop.created) pairs.push(["dcterms:created", `"${escLit(prop.created)}"^^xsd:dateTime`]);
+    if (prop.modified) pairs.push(["dcterms:modified", `"${escLit(prop.modified)}"^^xsd:dateTime`]);
     if (prop.domainUri) pairs.push(["rdfs:domain", serializeRef(prop.domainUri)]);
     for (const rangeUri of prop.ranges ?? []) {
       pairs.push(["rdfs:range", serializeRef(rangeUri)]);
@@ -323,6 +338,8 @@ export function serializeToTurtle(ontology: Ontology): string {
     for (const note of (ind.editorialNotes ?? []).filter((n) => n.value)) {
       pairs.push(["skos:editorialNote", langLit(note)]);
     }
+    if (ind.created) pairs.push(["dcterms:created", `"${escLit(ind.created)}"^^xsd:dateTime`]);
+    if (ind.modified) pairs.push(["dcterms:modified", `"${escLit(ind.modified)}"^^xsd:dateTime`]);
     if (pairs.length === 0) return;
     const block = buildBlock(pairs);
     lines.push(`${c(ind.uri)} ${block[0]!}`);

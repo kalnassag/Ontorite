@@ -38,6 +38,10 @@ export interface OntologyClass {
   descriptions: LangString[];
   /** Multilingual editorial notes (skos:editorialNote) */
   editorialNotes: LangString[];
+  /** ISO 8601 timestamp — dcterms:created (set on add) */
+  created?: string;
+  /** ISO 8601 timestamp — dcterms:modified (set on every update) */
+  modified?: string;
   subClassOf: string[]; // URIs of parent classes
   disjointWith: string[]; // URIs of disjoint classes (owl:disjointWith)
   /** Logical restrictions defining this class */
@@ -56,6 +60,10 @@ export interface OntologyProperty {
   descriptions: LangString[];
   /** Multilingual editorial notes (skos:editorialNote) */
   editorialNotes: LangString[];
+  /** ISO 8601 timestamp — dcterms:created (set on add) */
+  created?: string;
+  /** ISO 8601 timestamp — dcterms:modified (set on every update) */
+  modified?: string;
   domainUri: string; // URI of the class this property belongs to (rdfs:domain)
   ranges: string[]; // One or more range URIs (rdfs:range); was single string in v1
   subPropertyOf: string[]; // URIs of parent properties
@@ -81,6 +89,10 @@ export interface OntologyMetadata {
   versionInfo: string;
   /** Multilingual editorial notes on the ontology itself (skos:editorialNote) */
   editorialNotes: LangString[];
+  /** ISO 8601 timestamp — dcterms:created on the ontology */
+  created?: string;
+  /** ISO 8601 timestamp — dcterms:modified on the ontology */
+  modified?: string;
   prefixes: Record<string, string>; // prefix → URI
   defaultLanguage: string; // Default lang tag for new labels (user pref, not auto-applied)
 }
@@ -105,6 +117,10 @@ export interface Individual {
   propertyValues: IndividualPropertyValue[];
   /** Multilingual editorial notes (skos:editorialNote) */
   editorialNotes: LangString[];
+  /** ISO 8601 timestamp — dcterms:created (set on add) */
+  created?: string;
+  /** ISO 8601 timestamp — dcterms:modified (set on every update) */
+  modified?: string;
 }
 
 /** A triple that the parser found but the model doesn't explicitly support */

@@ -10,6 +10,7 @@ import { ChevronDown, ChevronRight, Pencil, Check, X, Trash2, Plus, StickyNote }
 import { useStore } from "../../lib/store";
 import { compact, buildUri, toCamelCase } from "../../lib/uri-utils";
 import EditorialNotesDrawer from "../dialogs/EditorialNotesDrawer";
+import TimestampFooter from "./TimestampFooter";
 import type { Individual, IndividualPropertyValue, OntologyProperty } from "../../types";
 
 interface Props {
@@ -181,6 +182,7 @@ export default function IndividualCard({ individual, defaultExpanded = false }: 
               ))}
             </div>
             <span className="hidden font-mono text-xs text-th-fg-4 group-hover:inline">{c(individual.uri)}</span>
+            <TimestampFooter created={individual.created} modified={individual.modified} />
           </div>
           {noteCount > 0 && (
             <button

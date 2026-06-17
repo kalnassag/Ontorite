@@ -138,6 +138,8 @@ function newOntology(meta: Partial<OntologyMetadata>): Ontology {
       versionIRI: meta.versionIRI || "",
       versionInfo: meta.versionInfo || "",
       editorialNotes: meta.editorialNotes || [],
+      created: meta.created ?? now,
+      modified: meta.modified ?? now,
       prefixes: { ...STANDARD_PREFIXES, ...meta.prefixes },
       defaultLanguage: meta.defaultLanguage || "en",
     },
@@ -153,6 +155,8 @@ function newOntology(meta: Partial<OntologyMetadata>): Ontology {
 const SKOS_EDITORIAL_NOTE = "http://www.w3.org/2004/02/skos/core#editorialNote";
 const OWL_VERSION_IRI = "http://www.w3.org/2002/07/owl#versionIRI";
 const OWL_VERSION_INFO = "http://www.w3.org/2002/07/owl#versionInfo";
+const DCT_CREATED = "http://purl.org/dc/terms/created";
+const DCT_MODIFIED = "http://purl.org/dc/terms/modified";
 
 /**
  * One-time migration helper: hoist legacy skos:editorialNote and
@@ -163,12 +167,16 @@ const OWL_VERSION_INFO = "http://www.w3.org/2002/07/owl#versionInfo";
  * Exported for unit tests.
  */
 export function sweepLegacyTriples(onto: Ontology): void {
-  // Classes: move skos:editorialNote from extraTriples to editorialNotes
+  // Classes: move skos:editorialNote + dcterms:created/modified from extraTriples
   for (const cls of onto.classes) {
     const keep: typeof cls.extraTriples = [];
     for (const et of cls.extraTriples) {
       if (et.predicate === SKOS_EDITORIAL_NOTE && et.isLiteral) {
         cls.editorialNotes.push({ value: et.object, lang: et.lang ?? "" });
+      } else if (et.predicate === DCT_CREATED && et.isLiteral) {
+        if (!cls.created) cls.created = et.object;
+      } else if (et.predicate === DCT_MODIFIED && et.isLiteral) {
+        if (!cls.modified) cls.modified = et.object;
       } else {
         keep.push(et);
       }
@@ -181,6 +189,10 @@ export function sweepLegacyTriples(onto: Ontology): void {
     for (const et of prop.extraTriples) {
       if (et.predicate === SKOS_EDITORIAL_NOTE && et.isLiteral) {
         prop.editorialNotes.push({ value: et.object, lang: et.lang ?? "" });
+      } else if (et.predicate === DCT_CREATED && et.isLiteral) {
+        if (!prop.created) prop.created = et.object;
+      } else if (et.predicate === DCT_MODIFIED && et.isLiteral) {
+        if (!prop.modified) prop.modified = et.object;
       } else {
         keep.push(et);
       }
@@ -203,6 +215,14 @@ export function sweepLegacyTriples(onto: Ontology): void {
       }
       if (t.predicate === SKOS_EDITORIAL_NOTE && t.isLiteral) {
         onto.metadata.editorialNotes.push({ value: t.object, lang: t.lang ?? "" });
+        continue;
+      }
+      if (t.predicate === DCT_CREATED && t.isLiteral) {
+        if (!onto.metadata.created) onto.metadata.created = t.object;
+        continue;
+      }
+      if (t.predicate === DCT_MODIFIED && t.isLiteral) {
+        if (!onto.metadata.modified) onto.metadata.modified = t.object;
         continue;
       }
     }
@@ -502,12 +522,13 @@ export const useStore = create<EditorState>((set, get) => {
     },
 
     updateMetadata: (patch) => {
+      const stamp = new Date().toISOString();
       set((s) => ({
         _history: [...s._history.slice(-49), s.ontologies],
         _future: [],
         ontologies: updateActive(s.ontologies, s.activeOntologyId, (o) => ({
           ...o,
-          metadata: { ...o.metadata, ...patch },
+          metadata: { ...o.metadata, ...patch, modified: patch.modified ?? stamp },
         })),
       }));
       persist();
@@ -523,6 +544,7 @@ export const useStore = create<EditorState>((set, get) => {
       const localName = partial.localName || toPascalCase(label);
       const uri = partial.uri || buildUri(onto.metadata.baseUri, localName);
 
+      const now = new Date().toISOString();
       const cls: OntologyClass = {
         id,
         localName,
@@ -530,6 +552,8 @@ export const useStore = create<EditorState>((set, get) => {
         labels: partial.labels || [{ value: label, lang: onto.metadata.defaultLanguage }],
         descriptions: partial.descriptions || [{ value: "", lang: onto.metadata.defaultLanguage }],
         editorialNotes: partial.editorialNotes || [],
+        created: partial.created ?? now,
+        modified: partial.modified ?? now,
         subClassOf: partial.subClassOf || [],
         disjointWith: partial.disjointWith || [],
         restrictions: partial.restrictions || [],
@@ -549,6 +573,7 @@ export const useStore = create<EditorState>((set, get) => {
     },
 
     updateClass: (id, patch) => {
+      const stamp = new Date().toISOString();
       set((s) => ({
         _history: [...s._history.slice(-49), s.ontologies],
         _future: [],
@@ -560,7 +585,7 @@ export const useStore = create<EditorState>((set, get) => {
           return {
             ...o,
             classes: o.classes.map((c) => {
-              if (c.id === id) return { ...c, ...patch };
+              if (c.id === id) return { ...c, ...patch, modified: patch.modified ?? stamp };
               if (!uriChanged) return c;
               return {
                 ...c,
@@ -615,6 +640,7 @@ export const useStore = create<EditorState>((set, get) => {
       const localName = partial.localName || toCamelCase(label);
       const uri = partial.uri || buildUri(onto.metadata.baseUri, localName);
 
+      const now = new Date().toISOString();
       const prop: OntologyProperty = {
         id,
         localName,
@@ -623,6 +649,8 @@ export const useStore = create<EditorState>((set, get) => {
         labels: partial.labels || [{ value: label, lang: onto.metadata.defaultLanguage }],
         descriptions: partial.descriptions || [{ value: "", lang: onto.metadata.defaultLanguage }],
         editorialNotes: partial.editorialNotes || [],
+        created: partial.created ?? now,
+        modified: partial.modified ?? now,
         domainUri: partial.domainUri || "",
         ranges: partial.ranges ?? [],
         subPropertyOf: partial.subPropertyOf || [],
@@ -646,6 +674,7 @@ export const useStore = create<EditorState>((set, get) => {
     },
 
     updateProperty: (id, patch) => {
+      const stamp = new Date().toISOString();
       set((s) => ({
         _history: [...s._history.slice(-49), s.ontologies],
         _future: [],
@@ -657,7 +686,7 @@ export const useStore = create<EditorState>((set, get) => {
           return {
             ...o,
             properties: o.properties.map((p) => {
-              if (p.id === id) return { ...p, ...patch };
+              if (p.id === id) return { ...p, ...patch, modified: patch.modified ?? stamp };
               if (!uriChanged) return p;
               return {
                 ...p,
@@ -700,6 +729,7 @@ export const useStore = create<EditorState>((set, get) => {
       const localNameVal = toCamelCase(label) || id;
       const uri = buildUri(onto.metadata.baseUri, localNameVal);
 
+      const now = new Date().toISOString();
       const individual: Individual = {
         id,
         uri,
@@ -707,6 +737,8 @@ export const useStore = create<EditorState>((set, get) => {
         typeUris: [typeUri],
         propertyValues: [],
         editorialNotes: [],
+        created: now,
+        modified: now,
       };
 
       set((s) => ({
@@ -722,13 +754,14 @@ export const useStore = create<EditorState>((set, get) => {
     },
 
     updateIndividual: (id, patch) => {
+      const stamp = new Date().toISOString();
       set((s) => ({
         _history: [...s._history.slice(-49), s.ontologies],
         _future: [],
         ontologies: updateActive(s.ontologies, s.activeOntologyId, (o) => {
           const oldUri = o.individuals.find((i) => i.id === id)?.uri;
           const updated = o.individuals.map((ind) =>
-            ind.id === id ? { ...ind, ...patch } : ind
+            ind.id === id ? { ...ind, ...patch, modified: patch.modified ?? stamp } : ind
           );
           const newUri = updated.find((i) => i.id === id)?.uri;
           // Cascade URI rename into other individuals' object-property values
@@ -934,12 +967,15 @@ export const useStore = create<EditorState>((set, get) => {
         const newClassId = genId();
         const { localName: newLocalName, uri: newUri } = rebase(cls.localName);
         existingUris.add(newUri);
+        const stamp = new Date().toISOString();
 
         const newCls: OntologyClass = {
           ...cls,
           id: newClassId,
           localName: newLocalName,
           uri: newUri,
+          created: stamp,
+          modified: stamp,
         };
 
         const newProperties: OntologyProperty[] = properties.map((prop) => {
@@ -951,6 +987,8 @@ export const useStore = create<EditorState>((set, get) => {
             localName: pLocal,
             uri: pUri,
             domainUri: newUri, // remap domain to the new class URI
+            created: stamp,
+            modified: stamp,
           };
         });
 
@@ -972,6 +1010,7 @@ export const useStore = create<EditorState>((set, get) => {
         const { localName: pLocal, uri: pUri } = rebase(property.localName);
         const domainUri =
           opts?.domainUri !== undefined ? opts.domainUri : property.domainUri;
+        const stamp = new Date().toISOString();
 
         const newProp: OntologyProperty = {
           ...property,
@@ -979,6 +1018,8 @@ export const useStore = create<EditorState>((set, get) => {
           localName: pLocal,
           uri: pUri,
           domainUri,
+          created: stamp,
+          modified: stamp,
         };
 
         set((s) => ({

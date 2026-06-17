@@ -10,6 +10,7 @@ import Drawer from "../layout/Drawer";
 import LabelEditor from "../forms/LabelEditor";
 import { useStore } from "../../lib/store";
 import { lookupPrefixNamespace, WELL_KNOWN_PREFIXES } from "../../lib/vocab-autocomplete";
+import { formatAbsoluteTime, formatTimeSince } from "../../lib/time-format";
 
 interface Props {
   open: boolean;
@@ -111,6 +112,25 @@ export default function OntologyMetadataDrawer({ open, onClose }: Props) {
           prefixes={md.prefixes}
           onChange={(prefixes) => updateMetadata({ prefixes })}
         />
+
+        {(md.created || md.modified) && (
+          <Field label="Provenance" hint="Auto-stamped — emitted as dcterms:created / dcterms:modified.">
+            <div className="space-y-0.5 text-2xs text-th-fg-3">
+              {md.modified && (
+                <div>
+                  <span className="text-th-fg-4">Modified </span>
+                  <span title={formatAbsoluteTime(md.modified)}>{formatTimeSince(md.modified)}</span>
+                </div>
+              )}
+              {md.created && (
+                <div>
+                  <span className="text-th-fg-4">Created </span>
+                  <span title={formatAbsoluteTime(md.created)}>{formatTimeSince(md.created)}</span>
+                </div>
+              )}
+            </div>
+          </Field>
+        )}
       </div>
     </Drawer>
   );

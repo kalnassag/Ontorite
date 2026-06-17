@@ -95,6 +95,62 @@ describe('Editorial notes + version round-trip', () => {
   });
 });
 
+describe('dcterms:created/modified round-trip', () => {
+  const turtle = `
+    @prefix owl:     <http://www.w3.org/2002/07/owl#> .
+    @prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+    @prefix dcterms: <http://purl.org/dc/terms/> .
+    @prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+    @prefix ex:      <http://example.org/> .
+
+    ex:Onto a owl:Ontology ;
+      dcterms:created "2026-01-15T10:00:00Z"^^xsd:dateTime ;
+      dcterms:modified "2026-06-17T12:30:00Z"^^xsd:dateTime .
+
+    ex:Dog a owl:Class ;
+      rdfs:label "Dog"@en ;
+      dcterms:created "2026-01-20T14:00:00Z"^^xsd:dateTime ;
+      dcterms:modified "2026-06-10T09:00:00Z"^^xsd:dateTime .
+
+    ex:barks a owl:DatatypeProperty ;
+      rdfs:label "barks"@en ;
+      rdfs:domain ex:Dog ;
+      dcterms:created "2026-02-01T08:00:00Z"^^xsd:dateTime .
+  `;
+
+  it('extracts created/modified into typed fields, not extraTriples or unmapped', () => {
+    const parsed = parseTurtle(turtle);
+    const model = buildModelFromTriples(parsed);
+    expect(model.metadata.created).toBe('2026-01-15T10:00:00Z');
+    expect(model.metadata.modified).toBe('2026-06-17T12:30:00Z');
+
+    const dog = model.classes.find((c) => c.localName === 'Dog')!;
+    expect(dog.created).toBe('2026-01-20T14:00:00Z');
+    expect(dog.modified).toBe('2026-06-10T09:00:00Z');
+    expect(dog.extraTriples.some((e) => e.predicate.includes('dc/terms/'))).toBe(false);
+
+    const barks = model.properties.find((p) => p.localName === 'barks')!;
+    expect(barks.created).toBe('2026-02-01T08:00:00Z');
+    expect(barks.modified).toBeUndefined();
+  });
+
+  it('round-trips without duplicating dcterms triples', () => {
+    const parsed1 = parseTurtle(turtle);
+    const model1 = buildModelFromTriples(parsed1);
+    const ontology1 = { ...model1, id: 'test', createdAt: '', updatedAt: '' } as any;
+    const serialized = serializeToTurtle(ontology1);
+
+    expect(serialized.match(/dcterms:created/g)).toHaveLength(3);  // ontology + class + property
+    expect(serialized.match(/dcterms:modified/g)).toHaveLength(2); // ontology + class only
+
+    const parsed2 = parseTurtle(serialized);
+    const model2 = buildModelFromTriples(parsed2);
+    expect(model2.metadata.created).toBe('2026-01-15T10:00:00Z');
+    const dog2 = model2.classes.find((c) => c.localName === 'Dog')!;
+    expect(dog2.created).toBe('2026-01-20T14:00:00Z');
+  });
+});
+
 describe('owl:unionOf collection round-trip', () => {
   const turtle = `
     @prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .

@@ -8,6 +8,7 @@ import PropertyForm from '../forms/PropertyForm';
 import type { OntologyClass, OntologyProperty } from "../../types";
 import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, Clipboard, StickyNote } from 'lucide-react';
 import EditorialNotesDrawer from '../dialogs/EditorialNotesDrawer';
+import TimestampFooter from './TimestampFooter';
 
 interface Props {
   cls: OntologyClass;
@@ -156,6 +157,7 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
                 {cls.descriptions[0]?.value}
               </p>
             )}
+            <TimestampFooter created={cls.created} modified={cls.modified} />
           </div>
 
           {/* Persistent editorial-notes chip (only when notes exist) */}

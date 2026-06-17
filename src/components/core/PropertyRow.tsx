@@ -9,6 +9,7 @@ import { useStore } from "../../lib/store";
 import { compact } from "../../lib/uri-utils";
 import PropertyForm from "../forms/PropertyForm";
 import EditorialNotesDrawer from "../dialogs/EditorialNotesDrawer";
+import TimestampFooter from "./TimestampFooter";
 import type { OntologyProperty } from "../../types";
 
 interface Props {
@@ -92,6 +93,7 @@ export default function PropertyRow({ property, onDelete }: Props) {
             ))}
           </div>
         )}
+        <TimestampFooter created={property.created} modified={property.modified} />
       </div>
 
       {/* Persistent editorial-notes chip (only when notes exist) */}
