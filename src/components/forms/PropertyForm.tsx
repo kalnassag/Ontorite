@@ -8,7 +8,8 @@ import { toCamelCase, XSD_TYPES, compact, expand, buildUri } from "../../lib/uri
 import LabelEditor from "./LabelEditor";
 import ExtraTripleEditor from "./ExtraTripleEditor";
 import VocabAutocomplete, { type LocalSuggestion } from "./VocabAutocomplete";
-import type { OntologyProperty, LangString, PropertyType, ExtraTriple } from "../../types";
+import { classExprFormat } from "../../types";
+import type { OntologyProperty, LangString, PropertyType, ExtraTriple, ClassExpression } from "../../types";
 
 interface Props {
   existing?: OntologyProperty;
@@ -44,8 +45,16 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
   const [propType, setPropType] = useState<PropertyType>(
     existing?.type ?? "owl:DatatypeProperty"
   );
-  const [domainUri, setDomainUri] = useState(existing?.domainUri ?? defaultDomainUri ?? "");
-  const [ranges, setRanges] = useState<string[]>(existing?.ranges ?? []);
+  // Domain — internally a list of URIs. 1 entry = single class; 2+ = union.
+  const initialDomainUris: string[] = (() => {
+    if (existing) {
+      if (existing.domain.kind === "class") return existing.domain.uri ? [existing.domain.uri] : [];
+      return [...existing.domain.uris];
+    }
+    return defaultDomainUri ? [defaultDomainUri] : [];
+  })();
+  const [domainUris, setDomainUris] = useState<string[]>(initialDomainUris);
+  const [ranges, setRanges] = useState<ClassExpression[]>(existing?.ranges ?? []);
   const [rangeInput, setRangeInput] = useState(""); // for annotation free-text input
   const [subPropertyOf, setSubPropertyOf] = useState<string[]>(existing?.subPropertyOf ?? []);
   // "pills" = current tag-buttons (shown as "Compact"), "dropdown" = searchable select (shown as "List")
@@ -78,6 +87,35 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
     (p) => p.type === propType && (!existing || p.id !== existing.id)
   );
 
+  // Range helpers — each entry is a ClassExpression so unions imported from
+  // TTL preserve their semantics. The form lets users add single-class entries;
+  // existing union entries are shown as a single chip ("A ∪ B") that can be
+  // removed wholesale.
+  const rangeKey = (r: ClassExpression): string =>
+    r.kind === "class" ? `c:${r.uri}` : `u:${[...r.uris].sort().join("|")}`;
+  const formatRangeChip = (r: ClassExpression): string => {
+    const friendly = (u: string) => {
+      const cls = allClasses.find((c) => c.uri === u);
+      if (cls) return cls.labels[0]?.value || cls.localName;
+      const xsd = Object.entries(XSD_TYPES).find(([, v]) => v === u)?.[0];
+      if (xsd) return xsd;
+      return u.split(/[#/]/).pop() || u;
+    };
+    return classExprFormat(r, friendly);
+  };
+  const rangeHasUri = (uri: string): boolean =>
+    ranges.some((r) => r.kind === "class" ? r.uri === uri : r.uris.includes(uri));
+  const addSingleRange = (uri: string) => {
+    const v = uri.trim();
+    if (!v || rangeHasUri(v)) return;
+    setRanges((prev) => [...prev, { kind: "class", uri: v }]);
+    setRangeInput("");
+  };
+  const removeRangeEntry = (target: ClassExpression) => {
+    const k = rangeKey(target);
+    setRanges((prev) => prev.filter((r) => rangeKey(r) !== k));
+  };
+
   const derivedLocalName = localNameManual
     ? localName
     : toCamelCase(labels[0]?.value ?? "");
@@ -101,13 +139,20 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
 
     const parseCard = (s: string) => { const n = parseInt(s, 10); return isNaN(n) ? undefined : n; };
     const exactCardVal = parseCard(exactCard);
+
+    const domain: ClassExpression = domainUris.length === 0
+      ? { kind: "class", uri: "" }
+      : domainUris.length === 1
+        ? { kind: "class", uri: domainUris[0]! }
+        : { kind: "union", uris: domainUris };
+
     const data: Partial<OntologyProperty> = {
       localName: effectiveName,
       uri: uriValue || buildUri(baseUri, effectiveName),
       type: propType,
       labels: cleanLabels.length ? cleanLabels : [{ value: effectiveName, lang: "" }],
       descriptions: cleanDescs,
-      domainUri,
+      domain,
       ranges,
       subPropertyOf,
       inverseOf: inverseOf || undefined,
@@ -226,23 +271,56 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
         />
       </div>
 
-      {/* Domain */}
+      {/* Domain — single class or owl:unionOf when 2+ chips */}
       <div>
-        <label className="mb-1 block text-2xs font-medium uppercase tracking-wide text-th-fg-3">
+        <label className="mb-1 flex items-center gap-2 text-2xs font-medium uppercase tracking-wide text-th-fg-3">
           Domain
+          {domainUris.length > 1 && (
+            <span className="rounded bg-blue-500/15 px-1.5 py-0.5 font-normal normal-case text-blue-400">
+              owl:unionOf of {domainUris.length} classes
+            </span>
+          )}
         </label>
-        <select
-          value={domainUri}
-          onChange={(e) => setDomainUri(e.target.value)}
-          className="w-full rounded bg-th-input px-2 py-1 text-xs text-th-fg focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-          <option value="">(unassigned)</option>
-          {allClasses.map((cls) => (
-            <option key={cls.id} value={cls.uri}>
-              {cls.labels[0]?.value || cls.localName}
-            </option>
-          ))}
-        </select>
+        <div className="space-y-1.5">
+          {domainUris.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {domainUris.map((uri) => {
+                const cls = allClasses.find((c) => c.uri === uri);
+                const label = cls?.labels[0]?.value || cls?.localName || uri.split(/[#/]/).pop();
+                return (
+                  <span
+                    key={uri}
+                    className="flex items-center gap-1 rounded-full bg-blue-700/30 px-2 py-0.5 text-2xs text-blue-300"
+                  >
+                    {label}
+                    <button
+                      onClick={() => setDomainUris((prev) => prev.filter((u) => u !== uri))}
+                      className="opacity-60 hover:opacity-100"
+                      title="Remove"
+                    >×</button>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          <VocabAutocomplete
+            value=""
+            onChange={(val) => {
+              const v = val.trim();
+              if (v && !domainUris.includes(v)) setDomainUris((prev) => [...prev, v]);
+            }}
+            filter={{ kinds: ["class"] }}
+            localEntries={allClasses
+              .filter((c) => !domainUris.includes(c.uri))
+              .map((c): LocalSuggestion => ({
+                uri: c.uri,
+                localName: c.localName,
+                label: c.labels[0]?.value ?? c.localName,
+                kind: "class",
+              }))}
+            placeholder={domainUris.length === 0 ? "Pick a domain class (type to search)…" : "+ Add another class (creates a union)…"}
+          />
+        </div>
       </div>
 
       {/* Range — multi-select */}
@@ -260,37 +338,34 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
           <div className="space-y-1.5">
             {ranges.length > 0 && (
               <div className="flex flex-wrap gap-1">
-                {ranges.map((uri) => {
-                  const cls = allClasses.find((c) => c.uri === uri);
-                  return (
-                    <span
-                      key={uri}
-                      className="flex items-center gap-1 rounded-full bg-blue-700/30 px-2 py-0.5 text-2xs text-blue-300"
-                    >
-                      {cls?.labels[0]?.value || cls?.localName || uri.split(/[#/]/).pop()}
-                      <button
-                        onClick={() => setRanges((prev) => prev.filter((r) => r !== uri))}
-                        className="ml-0.5 opacity-60 hover:opacity-100"
-                        title="Remove"
-                      >×</button>
-                    </span>
-                  );
-                })}
+                {ranges.map((r) => (
+                  <span
+                    key={rangeKey(r)}
+                    className="flex items-center gap-1 rounded-full bg-blue-700/30 px-2 py-0.5 text-2xs text-blue-300"
+                    title={r.kind === "union" ? `owl:unionOf (${r.uris.length} classes)` : undefined}
+                  >
+                    {formatRangeChip(r)}
+                    <button
+                      onClick={() => removeRangeEntry(r)}
+                      className="ml-0.5 opacity-60 hover:opacity-100"
+                      title="Remove"
+                    >×</button>
+                  </span>
+                ))}
               </div>
             )}
             <VocabAutocomplete
               value={rangeInput}
               onChange={(val) => {
-                if (val && !ranges.includes(val) && val !== rangeInput) {
-                  setRanges((prev) => [...prev, val]);
-                  setRangeInput("");
+                if (val && !rangeHasUri(val) && val !== rangeInput) {
+                  addSingleRange(val);
                 } else {
                   setRangeInput(val);
                 }
               }}
               filter={{ kinds: ["class"] }}
               localEntries={allClasses
-                .filter((c) => !ranges.includes(c.uri))
+                .filter((c) => !rangeHasUri(c.uri))
                 .map((c): LocalSuggestion => ({
                   uri: c.uri,
                   localName: c.localName,
@@ -304,30 +379,26 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
           <div className="space-y-1.5">
             {ranges.length > 0 && (
               <div className="flex flex-wrap gap-1">
-                {ranges.map((uri) => {
-                  const compacted = Object.entries(XSD_TYPES).find(([, v]) => v === uri)?.[0] ?? uri.split(/[#/]/).pop() ?? uri;
-                  return (
-                    <span
-                      key={uri}
-                      className="flex items-center gap-1 rounded-full bg-emerald-700/30 px-2 py-0.5 text-2xs text-emerald-300"
-                    >
-                      {compacted}
-                      <button
-                        onClick={() => setRanges((prev) => prev.filter((r) => r !== uri))}
-                        className="ml-0.5 opacity-60 hover:opacity-100"
-                        title="Remove"
-                      >×</button>
-                    </span>
-                  );
-                })}
+                {ranges.map((r) => (
+                  <span
+                    key={rangeKey(r)}
+                    className="flex items-center gap-1 rounded-full bg-emerald-700/30 px-2 py-0.5 text-2xs text-emerald-300"
+                  >
+                    {formatRangeChip(r)}
+                    <button
+                      onClick={() => removeRangeEntry(r)}
+                      className="ml-0.5 opacity-60 hover:opacity-100"
+                      title="Remove"
+                    >×</button>
+                  </span>
+                ))}
               </div>
             )}
             <VocabAutocomplete
               value={rangeInput}
               onChange={(val) => {
-                if (val && !ranges.includes(val) && val !== rangeInput) {
-                  setRanges((prev) => [...prev, val]);
-                  setRangeInput("");
+                if (val && !rangeHasUri(val) && val !== rangeInput) {
+                  addSingleRange(val);
                 } else {
                   setRangeInput(val);
                 }
@@ -340,14 +411,14 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
           <div className="space-y-1.5">
             {ranges.length > 0 && (
               <div className="flex flex-wrap gap-1">
-                {ranges.map((uri) => (
+                {ranges.map((r) => (
                   <span
-                    key={uri}
+                    key={rangeKey(r)}
                     className="flex items-center gap-1 rounded-full bg-th-border px-2 py-0.5 text-2xs text-th-fg-3"
                   >
-                    {uri}
+                    {formatRangeChip(r)}
                     <button
-                      onClick={() => setRanges((prev) => prev.filter((r) => r !== uri))}
+                      onClick={() => removeRangeEntry(r)}
                       className="ml-0.5 opacity-60 hover:opacity-100"
                     >×</button>
                   </span>
@@ -357,9 +428,8 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
             <VocabAutocomplete
               value={rangeInput}
               onChange={(val) => {
-                if (val && !ranges.includes(val) && val !== rangeInput) {
-                  setRanges((prev) => [...prev, val]);
-                  setRangeInput("");
+                if (val && !rangeHasUri(val) && val !== rangeInput) {
+                  addSingleRange(val);
                 } else {
                   setRangeInput(val);
                 }

@@ -6,6 +6,7 @@
 import { Pencil, X } from "lucide-react";
 import { useStore } from "../../lib/store";
 import { localName } from "../../lib/uri-utils";
+import { classExprFormat } from "../../types";
 
 interface Props {
   classId: string;
@@ -33,9 +34,10 @@ export default function ClassDetailPane({ classId, onEditClass, onSelectClass }:
   const cls = activeOntology.classes.find((c) => c.id === classId);
   if (!cls) return null;
 
-  const domainProperties = activeOntology.properties.filter(
-    (p) => p.domainUri === cls.uri
-  );
+  const domainProperties = activeOntology.properties.filter((p) => {
+    if (p.domain.kind === "class") return p.domain.uri === cls.uri;
+    return p.domain.uris.includes(cls.uri);
+  });
 
   const objectProps = domainProperties.filter((p) => p.type === "owl:ObjectProperty");
   const datatypeProps = domainProperties.filter((p) => p.type === "owl:DatatypeProperty");
@@ -170,7 +172,9 @@ export default function ClassDetailPane({ classId, onEditClass, onSelectClass }:
                           </span>
                           {(prop.ranges ?? []).length > 0 && (
                             <span className="truncate text-2xs text-th-fg-4">
-                              {(prop.ranges ?? []).map((r) => localName(r) || r).join(", ")}
+                              {(prop.ranges ?? [])
+                                .map((r) => classExprFormat(r, (u) => localName(u) || u))
+                                .join(", ")}
                             </span>
                           )}
                         </div>

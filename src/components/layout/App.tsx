@@ -164,8 +164,11 @@ export default function App() {
     if (!activeOntology) return map;
     for (const cls of activeOntology.classes) map.set(cls.id, []);
     for (const prop of activeOntology.properties) {
-      if (prop.domainUri) {
-        const cls = activeOntology.classes.find(c => c.uri === prop.domainUri);
+      const uris = prop.domain.kind === "class"
+        ? (prop.domain.uri ? [prop.domain.uri] : [])
+        : prop.domain.uris;
+      for (const u of uris) {
+        const cls = activeOntology.classes.find((c) => c.uri === u);
         if (cls) {
           const list = map.get(cls.id) ?? [];
           list.push(prop);
@@ -185,8 +188,14 @@ export default function App() {
   // U8: Unassigned property count
   const unassignedCount = useMemo(() => {
     if (!activeOntology) return 0;
-    const classUris = new Set(activeOntology.classes.map(c => c.uri));
-    return activeOntology.properties.filter(p => !p.domainUri || !classUris.has(p.domainUri)).length;
+    const classUris = new Set(activeOntology.classes.map((c) => c.uri));
+    return activeOntology.properties.filter((p) => {
+      const uris = p.domain.kind === "class"
+        ? (p.domain.uri ? [p.domain.uri] : [])
+        : p.domain.uris;
+      if (uris.length === 0) return true;
+      return !uris.some((u) => classUris.has(u));
+    }).length;
   }, [activeOntology]);
 
   if (!initialized) {

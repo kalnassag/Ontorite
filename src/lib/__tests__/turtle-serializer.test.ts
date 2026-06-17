@@ -182,6 +182,22 @@ describe('owl:unionOf collection round-trip', () => {
     expect(members).toContain('http://example.org/Product');
   });
 
+  it('hoists union expressions into the property domain (no blank-node class card)', () => {
+    const parsed = parseTurtle(turtle);
+    const model = buildModelFromTriples(parsed);
+
+    // No class entry with a blank-node URI should exist
+    expect(model.classes.some((c) => c.uri.startsWith('_:'))).toBe(false);
+
+    // The property's domain is a union with both members
+    const hasTarget = model.properties.find((p) => p.localName === 'hasTarget')!;
+    expect(hasTarget.domain.kind).toBe('union');
+    if (hasTarget.domain.kind === 'union') {
+      expect(hasTarget.domain.uris).toContain('http://example.org/Vaccine');
+      expect(hasTarget.domain.uris).toContain('http://example.org/Product');
+    }
+  });
+
   it('round-trips without losing union members and emits correct syntax', () => {
     const parsed1 = parseTurtle(turtle);
     const model1 = buildModelFromTriples(parsed1);

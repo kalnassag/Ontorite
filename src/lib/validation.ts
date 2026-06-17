@@ -96,48 +96,60 @@ export function validate(ontology: Ontology): ValidationIssue[] {
       });
     }
 
-    if (!prop.domainUri) {
+    const domainUris = prop.domain.kind === "class"
+      ? (prop.domain.uri ? [prop.domain.uri] : [])
+      : prop.domain.uris;
+    if (domainUris.length === 0) {
       issues.push({
         severity: "warning",
         entityId: prop.id,
         entityType: "property",
         message: `Property ${prop.localName || prop.uri} has no domain (unassigned)`,
-        field: "domainUri",
+        field: "domain",
       });
-    } else if (!classUris.has(prop.domainUri)) {
-      issues.push({
-        severity: "error",
-        entityId: prop.id,
-        entityType: "property",
-        message: `Property domain references unknown class: ${prop.domainUri}`,
-        field: "domainUri",
-      });
+    } else {
+      const unknownMembers = domainUris.filter((u) => !classUris.has(u));
+      if (unknownMembers.length > 0) {
+        issues.push({
+          severity: "error",
+          entityId: prop.id,
+          entityType: "property",
+          message: `Property domain references unknown class${unknownMembers.length > 1 ? "es" : ""}: ${unknownMembers.join(", ")}`,
+          field: "domain",
+        });
+      }
     }
 
     if (prop.type === "owl:ObjectProperty") {
       for (const r of prop.ranges ?? []) {
-        if (!classUris.has(r)) {
-          issues.push({
-            severity: "warning",
-            entityId: prop.id,
-            entityType: "property",
-            message: `Object property range is not a known class: ${r}`,
-            field: "ranges",
-          });
+        const rUris = r.kind === "class" ? [r.uri] : r.uris;
+        for (const ru of rUris) {
+          if (!classUris.has(ru)) {
+            issues.push({
+              severity: "warning",
+              entityId: prop.id,
+              entityType: "property",
+              message: `Object property range is not a known class: ${ru}`,
+              field: "ranges",
+            });
+          }
         }
       }
     }
 
     if (prop.type === "owl:DatatypeProperty") {
       for (const r of prop.ranges ?? []) {
-        if (!xsdUris.has(r)) {
-          issues.push({
-            severity: "warning",
-            entityId: prop.id,
-            entityType: "property",
-            message: `Datatype property range is not a known XSD type: ${r}`,
-            field: "ranges",
-          });
+        const rUris = r.kind === "class" ? [r.uri] : r.uris;
+        for (const ru of rUris) {
+          if (!xsdUris.has(ru)) {
+            issues.push({
+              severity: "warning",
+              entityId: prop.id,
+              entityType: "property",
+              message: `Datatype property range is not a known XSD type: ${ru}`,
+              field: "ranges",
+            });
+          }
         }
       }
     }

@@ -12,6 +12,7 @@ import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { X, ZoomIn, ZoomOut, Maximize2, RefreshCw } from "lucide-react";
 import { useStore } from "../../lib/store";
 import { compact } from "../../lib/uri-utils";
+import { classExprFormat } from "../../types";
 import type { OntologyClass, OntologyProperty } from "../../types";
 
 interface Props { onClose: () => void; }
@@ -199,8 +200,10 @@ export default function TreeGraph({ onClose }: Props) {
       {hoveredId && (() => {
         const cls = classes.find((c) => c.id === hoveredId);
         if (!cls) return null;
-        const ownDatatype = properties.filter((p) => p.type === "owl:DatatypeProperty" && p.domainUri === cls.uri);
-        const ownAnnotation = properties.filter((p) => p.type === "owl:AnnotationProperty" && p.domainUri === cls.uri);
+        const domainIncludes = (p: typeof properties[number]) =>
+          p.domain.kind === "class" ? p.domain.uri === cls.uri : p.domain.uris.includes(cls.uri);
+        const ownDatatype = properties.filter((p) => p.type === "owl:DatatypeProperty" && domainIncludes(p));
+        const ownAnnotation = properties.filter((p) => p.type === "owl:AnnotationProperty" && domainIncludes(p));
         return (
           <div className="pointer-events-none absolute bottom-3 left-3 max-w-sm rounded border border-th-border bg-th-surface px-3 py-2 shadow-lg">
             <div className="text-xs font-semibold text-th-fg">{cls.labels[0]?.value || cls.localName}</div>
@@ -300,7 +303,9 @@ function PropertyList({ title, colour, props, prefixes, showRange }: {
       <div className={`mb-0.5 text-[10px] font-medium uppercase tracking-wide ${colour}`}>{title}</div>
       <ul className="space-y-0.5">
         {props.map((p) => {
-          const rng = showRange ? (p.ranges ?? []).map((r) => compact(r, prefixes)).join(", ") : "";
+          const rng = showRange
+            ? (p.ranges ?? []).map((r) => classExprFormat(r, (u) => compact(u, prefixes))).join(", ")
+            : "";
           return (
             <li key={p.id} className="flex items-baseline gap-2 text-2xs">
               <span className="text-th-fg">{p.labels[0]?.value || p.localName}</span>

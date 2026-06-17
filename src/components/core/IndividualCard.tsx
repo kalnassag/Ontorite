@@ -77,7 +77,10 @@ export default function IndividualCard({ individual, defaultExpanded = false }: 
 
   const schemaProps = new Map<string, OntologyProperty[]>();
   for (const typeUri of individual.typeUris) {
-    const propsForType = allProperties.filter((p) => p.domainUri === typeUri);
+    const propsForType = allProperties.filter((p) => {
+      if (p.domain.kind === "class") return p.domain.uri === typeUri;
+      return p.domain.uris.includes(typeUri);
+    });
     if (propsForType.length > 0) schemaProps.set(typeUri, propsForType);
   }
 

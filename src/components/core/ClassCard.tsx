@@ -284,6 +284,7 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
                         key={prop.id}
                         property={prop}
                         onDelete={onDelete ? (label) => onDelete(label) : undefined}
+                        viewedFromClassUri={cls.uri}
                       />
                     ))}
                   </div>

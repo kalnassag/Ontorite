@@ -564,6 +564,89 @@ export function buildModelFromTriples(parsed: ParseResult): {
     }
   }
 
+  // ── Step 0b: hoist owl:unionOf into ClassExpression ────────────────────
+  // Recognise blank-node class expressions of the shape
+  //   [ a owl:Class ; owl:unionOf ( :A :B ) ]
+  // so we don't create them as standalone class cards. We resolve them up-front
+  // and store the member URIs by blank-node id; downstream parsing turns any
+  // `rdfs:domain <bn>` / `rdfs:range <bn>` into a ClassExpression.
+  const RDF_FIRST = RDF + "first";
+  const RDF_REST  = RDF + "rest";
+  const RDF_NIL   = RDF + "nil";
+  const OWL_UNION = OWL + "unionOf";
+
+  const firstMap = new Map<string, string>(); // list cell → rdf:first member URI
+  const restMap  = new Map<string, string>(); // list cell → rdf:rest cell URI
+  for (const t of triples) {
+    if (!t.isLiteral) {
+      if (t.p === RDF_FIRST) firstMap.set(t.s, t.o);
+      if (t.p === RDF_REST)  restMap.set(t.s, t.o);
+    }
+  }
+
+  const resolveList = (head: string): string[] => {
+    const members: string[] = [];
+    const seen = new Set<string>();
+    let cur = head;
+    while (cur !== RDF_NIL) {
+      if (seen.has(cur)) break;
+      seen.add(cur);
+      const m = firstMap.get(cur);
+      if (m === undefined) break;
+      members.push(m);
+      cur = restMap.get(cur) ?? RDF_NIL;
+    }
+    return members;
+  };
+
+  // bnode URI → resolved union member URIs
+  const unionExpressions = new Map<string, string[]>();
+  // Triple indexes that belong to union resolution (owl:unionOf + list cells)
+  triples.forEach((t, idx) => {
+    if (t.p === OWL_UNION && !t.isLiteral) {
+      const members = resolveList(t.o);
+      if (members.length > 0) {
+        unionExpressions.set(t.s, members);
+        mappedTripleSet.add(idx);
+      }
+    }
+  });
+  // Mark list cells of recognised unions as consumed
+  if (unionExpressions.size > 0) {
+    const usedListHeads = new Set<string>();
+    for (const t of triples) {
+      if (t.p === OWL_UNION && unionExpressions.has(t.s)) {
+        usedListHeads.add(t.o);
+      }
+    }
+    const consumedCells = new Set<string>();
+    for (const head of usedListHeads) {
+      let cur = head;
+      while (cur !== RDF_NIL && !consumedCells.has(cur)) {
+        consumedCells.add(cur);
+        cur = restMap.get(cur) ?? RDF_NIL;
+      }
+    }
+    triples.forEach((t, idx) => {
+      if ((t.p === RDF_FIRST || t.p === RDF_REST) && consumedCells.has(t.s)) {
+        mappedTripleSet.add(idx);
+      }
+    });
+    // Also mark `a owl:Class` on union blank nodes — they're not standalone classes
+    triples.forEach((t, idx) => {
+      if (unionExpressions.has(t.s) && t.p === P.type && t.o === P.owlClass) {
+        mappedTripleSet.add(idx);
+      }
+    });
+  }
+
+  /** Convert a single URI to a ClassExpression, resolving unions if applicable. */
+  const toClassExpr = (uri: string): import("../types").ClassExpression => {
+    const union = unionExpressions.get(uri);
+    if (union) return { kind: "union", uris: union };
+    return { kind: "class", uri };
+  };
+
   // ── Step 1: classify subjects by rdf:type ──────────────────────────────
   // A subject can have multiple rdf:type values (e.g., an individual typed to a class)
   const typeMap = new Map<string, string>(); // subject URI → first owl type URI (for classes/props)
@@ -610,6 +693,7 @@ export function buildModelFromTriples(parsed: ParseResult): {
   const classTypeUris = new Set([P.owlClass, RDFS + "Class"]);
 
   for (const [uri, type] of typeMap) {
+    if (unionExpressions.has(uri)) continue; // hoisted as a ClassExpression
     if (classTypeUris.has(type)) {
       const ln = extractLocalName(uri);
       classMap.set(uri, {
@@ -640,7 +724,7 @@ export function buildModelFromTriples(parsed: ParseResult): {
         labels: [],
         descriptions: [],
         editorialNotes: [],
-        domainUri: "",
+        domain: { kind: "class", uri: "" },
         ranges: [],
         subPropertyOf: [],
         extraTriples: [],
@@ -660,6 +744,7 @@ export function buildModelFromTriples(parsed: ParseResult): {
   }
 
   for (const uri of subClassOfSubjects) {
+    if (unionExpressions.has(uri)) continue; // hoisted as a ClassExpression, not a standalone class
     if (!classMap.has(uri) && !propMap.has(uri)) {
       const ln = extractLocalName(uri);
       classMap.set(uri, {
@@ -680,6 +765,7 @@ export function buildModelFromTriples(parsed: ParseResult): {
   // Also promote any entity used as an rdf:type object that isn't already a known
   // schema type — if something is used as a type, it's a class by definition.
   for (const uri of usedAsType) {
+    if (unionExpressions.has(uri)) continue; // hoisted as a ClassExpression
     if (!classMap.has(uri) && !propMap.has(uri) && uri !== P.ontology
         && uri !== P.owlClass && uri !== P.objProp && uri !== P.dataProp
         && uri !== P.annotProp && uri !== (RDFS + "Class")) {
@@ -839,9 +925,12 @@ export function buildModelFromTriples(parsed: ParseResult): {
       } else if (t.p === P.modified && t.isLiteral) {
         if (!prop.modified) prop.modified = t.o;
       } else if (t.p === P.domain && !t.isLiteral) {
-        prop.domainUri = t.o;
+        prop.domain = toClassExpr(t.o);
       } else if (t.p === P.range && !t.isLiteral) {
-        if (!prop.ranges.includes(t.o)) prop.ranges.push(t.o);
+        const expr = toClassExpr(t.o);
+        // Dedupe: avoid two identical entries
+        const exists = prop.ranges.some((r) => JSON.stringify(r) === JSON.stringify(expr));
+        if (!exists) prop.ranges.push(expr);
       } else if (t.p === P.subPropertyOf && !t.isLiteral) {
         if (!prop.subPropertyOf.includes(t.o)) prop.subPropertyOf.push(t.o);
       } else if (t.p === P.inverseOf && !t.isLiteral) {

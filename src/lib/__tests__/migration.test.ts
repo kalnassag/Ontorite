@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { sweepLegacyTriples } from '../store';
-import type { Ontology } from '../../types';
+import { sweepLegacyTriples, hoistClassExpressions } from '../store';
+import type { Ontology, OntologyClass, OntologyProperty } from '../../types';
 
 const SKOS_EDITORIAL = 'http://www.w3.org/2004/02/skos/core#editorialNote';
 const OWL_VERSION_IRI = 'http://www.w3.org/2002/07/owl#versionIRI';
@@ -50,7 +50,7 @@ function makeOntology(): Ontology {
         labels: [{ value: 'barks', lang: 'en' }],
         descriptions: [],
         editorialNotes: [],
-        domainUri: 'http://example.org/Dog',
+        domain: { kind: 'class', uri: 'http://example.org/Dog' },
         ranges: [],
         subPropertyOf: [],
         extraTriples: [
@@ -122,6 +122,101 @@ describe('sweepLegacyTriples', () => {
     sweepLegacyTriples(onto);
     const snapshot = JSON.stringify(onto);
     sweepLegacyTriples(onto);
+    expect(JSON.stringify(onto)).toBe(snapshot);
+  });
+});
+
+describe('hoistClassExpressions — blank-node union → ClassExpression', () => {
+  // Models a legacy ontology saved before union refactor:
+  //   ex:hasTarget rdfs:domain _:b0 .
+  //   _:b0 a owl:Class ; owl:unionOf _:b1 .
+  //   _:b1 rdf:first ex:Vaccine ; rdf:rest _:b2 .
+  //   _:b2 rdf:first ex:Product ; rdf:rest rdf:nil .
+  function makeOntology(): Ontology {
+    const blankUnionClass: OntologyClass = {
+      id: 'bn1',
+      localName: '',
+      uri: '_:b0',
+      labels: [],
+      descriptions: [],
+      editorialNotes: [],
+      subClassOf: [],
+      disjointWith: [],
+      restrictions: [],
+      extraTriples: [
+        { predicate: 'http://www.w3.org/2002/07/owl#unionOf', object: '_:b1', isLiteral: false },
+      ],
+    };
+    // Bypass strict typing on purpose — this fixture intentionally uses the
+    // legacy `domainUri` / `ranges: string[]` shape that `hoistClassExpressions`
+    // is supposed to upgrade.
+    const property = {
+      id: 'p1',
+      localName: 'hasTarget',
+      uri: 'http://example.org/hasTarget',
+      type: 'owl:ObjectProperty' as const,
+      labels: [{ value: 'has target', lang: 'en' }],
+      descriptions: [],
+      editorialNotes: [],
+      domainUri: '_:b0',
+      ranges: ['http://example.org/Drug'],
+      subPropertyOf: [],
+      extraTriples: [],
+    } as unknown as OntologyProperty;
+    return {
+      id: 'o',
+      metadata: {
+        baseUri: 'http://example.org/',
+        ontologyUri: 'http://example.org/Onto',
+        ontologyLabel: '',
+        ontologyComment: '',
+        versionIRI: '',
+        versionInfo: '',
+        editorialNotes: [],
+        prefixes: {},
+        defaultLanguage: 'en',
+      },
+      classes: [blankUnionClass],
+      properties: [property],
+      individuals: [],
+      unmappedTriples: [
+        { subject: '_:b1', predicate: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#first', object: 'http://example.org/Vaccine', isLiteral: false },
+        { subject: '_:b1', predicate: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#rest', object: '_:b2', isLiteral: false },
+        { subject: '_:b2', predicate: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#first', object: 'http://example.org/Product', isLiteral: false },
+        { subject: '_:b2', predicate: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#rest', object: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#nil', isLiteral: false },
+      ],
+      createdAt: '',
+      updatedAt: '',
+    };
+  }
+
+  it('lifts the blank-node union into the property domain and removes the class', () => {
+    const onto = makeOntology();
+    hoistClassExpressions(onto);
+    expect(onto.classes).toHaveLength(0);
+    const prop = onto.properties[0]!;
+    expect(prop.domain.kind).toBe('union');
+    if (prop.domain.kind === 'union') {
+      expect(prop.domain.uris).toEqual(['http://example.org/Vaccine', 'http://example.org/Product']);
+    }
+    // Range was a single string in the legacy shape — should become a single-class expression
+    expect(prop.ranges).toHaveLength(1);
+    expect(prop.ranges[0]!.kind).toBe('class');
+    if (prop.ranges[0]!.kind === 'class') {
+      expect(prop.ranges[0]!.uri).toBe('http://example.org/Drug');
+    }
+    // List cells should be pruned from unmappedTriples
+    expect(onto.unmappedTriples.every((t) =>
+      t.predicate !== 'http://www.w3.org/1999/02/22-rdf-syntax-ns#first' &&
+      t.predicate !== 'http://www.w3.org/1999/02/22-rdf-syntax-ns#rest'
+    )).toBe(true);
+  });
+
+  it('is idempotent', () => {
+    const onto = makeOntology();
+    hoistClassExpressions(onto);
+    const snapshot = JSON.stringify(onto);
+    hoistClassExpressions(onto);
     expect(JSON.stringify(onto)).toBe(snapshot);
   });
 });

@@ -10,11 +10,18 @@ import { compact } from "../../lib/uri-utils";
 import PropertyForm from "../forms/PropertyForm";
 import EditorialNotesDrawer from "../dialogs/EditorialNotesDrawer";
 import TimestampFooter from "./TimestampFooter";
+import { classExprFormat } from "../../types";
 import type { OntologyProperty } from "../../types";
 
 interface Props {
   property: OntologyProperty;
   onDelete?: (label: string) => void;
+  /**
+   * If set, this row is being rendered nested inside a specific class's
+   * card. When the property's domain is a union, we show a "∪ also: …"
+   * chip naming the OTHER member classes for context.
+   */
+  viewedFromClassUri?: string;
 }
 
 const TYPE_BADGE: Record<OntologyProperty["type"], { label: string; className: string }> = {
@@ -23,7 +30,7 @@ const TYPE_BADGE: Record<OntologyProperty["type"], { label: string; className: s
   "owl:AnnotationProperty": { label: "A", className: "bg-prop-annotation-700 text-prop-annotation-100" },
 };
 
-export default function PropertyRow({ property, onDelete }: Props) {
+export default function PropertyRow({ property, onDelete, viewedFromClassUri }: Props) {
   const deleteProperty = useStore((s) => s.deleteProperty);
   const copyProperty = useStore((s) => s.copyProperty);
   const updateProperty = useStore((s) => s.updateProperty);
@@ -32,12 +39,23 @@ export default function PropertyRow({ property, onDelete }: Props) {
   const [showNotes, setShowNotes] = useState(false);
 
   const prefixes = activeOntology?.metadata.prefixes ?? {};
+  const allClasses = activeOntology?.classes ?? [];
   const badge = TYPE_BADGE[property.type];
   const primaryLabel = property.labels[0]?.value || property.localName;
   const noteCount = (property.editorialNotes ?? []).filter((n) => n.value).length;
+  // Label-aware short form: prefer label > localName > compact URI
+  const shortClassUri = (uri: string) => {
+    const found = allClasses.find((c) => c.uri === uri);
+    if (found) return found.labels[0]?.value || found.localName;
+    return compact(uri, prefixes);
+  };
   const rangeLabel = (property.ranges ?? []).length > 0
-    ? (property.ranges ?? []).map((r) => compact(r, prefixes)).join(", ")
+    ? (property.ranges ?? []).map((r) => classExprFormat(r, (u) => compact(u, prefixes))).join(", ")
     : null;
+  // "Shared with" companion classes (union domain only) — excluding the one this row is being viewed under.
+  const unionCompanions: string[] = (property.domain.kind === "union" && viewedFromClassUri)
+    ? property.domain.uris.filter((u) => u !== viewedFromClassUri).map(shortClassUri)
+    : [];
   const description = property.descriptions[0]?.value;
 
   if (editing) {
@@ -64,6 +82,14 @@ export default function PropertyRow({ property, onDelete }: Props) {
           <span className="text-sm font-medium text-th-fg">{primaryLabel}</span>
           {rangeLabel && (
             <span className="font-mono text-xs text-th-fg-3">{rangeLabel}</span>
+          )}
+          {unionCompanions.length > 0 && (
+            <span
+              className="rounded bg-blue-500/15 px-1.5 py-0.5 text-2xs font-medium text-blue-400"
+              title={`This property is shared via owl:unionOf with: ${unionCompanions.join(", ")}`}
+            >
+              ∪ also: {unionCompanions.join(", ")}
+            </span>
           )}
         </div>
         {description && (

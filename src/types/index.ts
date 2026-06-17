@@ -29,6 +29,66 @@ export interface OntologyRestriction {
   value: string; // Target URI or literal
 }
 
+/**
+ * A class expression usable as rdfs:domain or rdfs:range.
+ *
+ * - `class`: a single class URI (the common case)
+ * - `union`: an OWL `owl:unionOf` over multiple class URIs — round-trips to
+ *   `[ a owl:Class ; owl:unionOf ( :A :B ) ]` on serialization.
+ *
+ * Intersection / complement / oneOf can be added later with the same shape;
+ * unknown class expressions fall through to extraTriples / unmappedTriples.
+ */
+export type ClassExpression =
+  | { kind: "class"; uri: string }
+  | { kind: "union"; uris: string[] };
+
+/** All class URIs referenced by a ClassExpression. */
+export function classExprUris(expr: ClassExpression): string[] {
+  if (expr.kind === "class") return [expr.uri];
+  return expr.uris;
+}
+
+/** True if the expression references the given class URI (single or union member). */
+export function classExprIncludes(expr: ClassExpression, uri: string): boolean {
+  if (expr.kind === "class") return expr.uri === uri;
+  return expr.uris.includes(uri);
+}
+
+/** Map a class URI through a ClassExpression (used for URI-rename cascade). */
+export function classExprReplace(expr: ClassExpression, oldUri: string, newUri: string): ClassExpression {
+  if (expr.kind === "class") {
+    return expr.uri === oldUri ? { kind: "class", uri: newUri } : expr;
+  }
+  if (!expr.uris.includes(oldUri)) return expr;
+  return { kind: "union", uris: expr.uris.map((u) => (u === oldUri ? newUri : u)) };
+}
+
+/**
+ * Format a ClassExpression for display.
+ * @param toShort A function that turns a full URI into its short form
+ *                (`compact()` from uri-utils, or a localName lookup).
+ * @param joiner  String placed between union members (default ` ∪ `).
+ */
+export function classExprFormat(
+  expr: ClassExpression,
+  toShort: (uri: string) => string,
+  joiner: string = " ∪ ",
+): string {
+  if (expr.kind === "class") return toShort(expr.uri);
+  return expr.uris.map(toShort).join(joiner);
+}
+
+/** Drop a class URI from a ClassExpression. Returns null if the expression
+ *  becomes empty. A union that collapses to a single member becomes a single class. */
+export function classExprRemove(expr: ClassExpression, uri: string): ClassExpression | null {
+  if (expr.kind === "class") return expr.uri === uri ? null : expr;
+  const kept = expr.uris.filter((u) => u !== uri);
+  if (kept.length === 0) return null;
+  if (kept.length === 1) return { kind: "class", uri: kept[0]! };
+  return { kind: "union", uris: kept };
+}
+
 /** An OWL class in the ontology */
 export interface OntologyClass {
   id: string;
@@ -64,8 +124,16 @@ export interface OntologyProperty {
   created?: string;
   /** ISO 8601 timestamp — dcterms:modified (set on every update) */
   modified?: string;
-  domainUri: string; // URI of the class this property belongs to (rdfs:domain)
-  ranges: string[]; // One or more range URIs (rdfs:range); was single string in v1
+  /**
+   * `rdfs:domain` as a ClassExpression — a single class or an `owl:unionOf`
+   * of multiple classes. The empty domain is represented as `{kind:"class", uri:""}`.
+   */
+  domain: ClassExpression;
+  /**
+   * `rdfs:range` — a list of ClassExpressions (each can be a single class or
+   * a union). Each entry serializes as its own `rdfs:range` triple.
+   */
+  ranges: ClassExpression[];
   subPropertyOf: string[]; // URIs of parent properties
   /** URI of the inverse property (owl:inverseOf) — ObjectProperty only */
   inverseOf?: string;

@@ -170,8 +170,11 @@ export default function ClassHierarchyTree({ onSelectClass, onDoubleClickClass, 
   const propertyCountMap = useMemo(() => {
     const map = new Map<string, number>();
     for (const prop of properties) {
-      if (prop.domainUri) {
-        map.set(prop.domainUri, (map.get(prop.domainUri) ?? 0) + 1);
+      const domainUris = prop.domain.kind === "class"
+        ? (prop.domain.uri ? [prop.domain.uri] : [])
+        : prop.domain.uris;
+      for (const u of domainUris) {
+        map.set(u, (map.get(u) ?? 0) + 1);
       }
     }
     return map;

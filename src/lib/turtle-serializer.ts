@@ -2,7 +2,7 @@
  * Serializes an Ontology to valid Turtle (.ttl) format.
  */
 
-import type { Ontology, OntologyClass, OntologyProperty, LangString, Individual } from "../types";
+import type { Ontology, OntologyClass, OntologyProperty, LangString, Individual, ClassExpression } from "../types";
 import { compact, STANDARD_PREFIXES } from "./uri-utils";
 
 const RDF_FIRST       = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
@@ -90,8 +90,10 @@ export function serializeToTurtle(ontology: Ontology): string {
     return members.length > 0 ? members : null;
   };
 
-  // Serialize any URI reference, inlining blank-node union-class expressions.
-  // e.g.  _:b0 (which is [ owl:unionOf ( A B ) ])  →  "[ owl:unionOf ( A B ) ]"
+  // Legacy: inline any blank-node union class expressions stored as a class
+  // with an `owl:unionOf` extraTriple. New ontologies use ClassExpression on
+  // properties and never produce blank-node class entries, but we keep this
+  // for back-compat with anything that didn't go through migration yet.
   const serializeRef = (uri: string): string => {
     if (uri.startsWith("_:")) {
       const bnClass = ontology.classes.find((cls) => cls.uri === uri);
@@ -102,12 +104,25 @@ export function serializeToTurtle(ontology: Ontology): string {
         if (unionEt) {
           const members = resolveList(unionEt.object);
           if (members && members.length > 0) {
-            return `[ owl:unionOf ( ${members.map(c).join(" ")} ) ]`;
+            return `[ a owl:Class ; owl:unionOf ( ${members.map(c).join(" ")} ) ]`;
           }
         }
       }
     }
     return c(uri);
+  };
+
+  /** Serialize a ClassExpression (domain or range). */
+  const serializeClassExpr = (expr: ClassExpression): string => {
+    if (expr.kind === "class") return serializeRef(expr.uri);
+    if (expr.uris.length === 1) return serializeRef(expr.uris[0]!);
+    return `[ a owl:Class ; owl:unionOf ( ${expr.uris.map(c).join(" ")} ) ]`;
+  };
+
+  /** Does a ClassExpression have at least one non-empty URI? */
+  const classExprNonEmpty = (expr: ClassExpression): boolean => {
+    if (expr.kind === "class") return !!expr.uri;
+    return expr.uris.some((u) => !!u);
   };
 
   // ── 1. @prefix declarations ─────────────────────────────────────────────
@@ -298,9 +313,12 @@ export function serializeToTurtle(ontology: Ontology): string {
     }
     if (prop.created) pairs.push(["dcterms:created", `"${escLit(prop.created)}"^^xsd:dateTime`]);
     if (prop.modified) pairs.push(["dcterms:modified", `"${escLit(prop.modified)}"^^xsd:dateTime`]);
-    if (prop.domainUri) pairs.push(["rdfs:domain", serializeRef(prop.domainUri)]);
-    for (const rangeUri of prop.ranges ?? []) {
-      pairs.push(["rdfs:range", serializeRef(rangeUri)]);
+    if (prop.domain && classExprNonEmpty(prop.domain)) {
+      pairs.push(["rdfs:domain", serializeClassExpr(prop.domain)]);
+    }
+    for (const rangeExpr of prop.ranges ?? []) {
+      if (!classExprNonEmpty(rangeExpr)) continue;
+      pairs.push(["rdfs:range", serializeClassExpr(rangeExpr)]);
     }
     for (const parentUri of prop.subPropertyOf) {
       pairs.push(["rdfs:subPropertyOf", c(parentUri)]);

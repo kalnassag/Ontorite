@@ -7,7 +7,8 @@
  */
 
 import { create } from "zustand";
-import type { Ontology, OntologyClass, OntologyMetadata, OntologyProperty, Individual, IndividualPropertyValue, ClipboardItem, UnmappedTriple, ExtraTriple } from "../types";
+import type { Ontology, OntologyClass, OntologyMetadata, OntologyProperty, Individual, IndividualPropertyValue, ClipboardItem, UnmappedTriple, ExtraTriple, ClassExpression } from "../types";
+import { classExprReplace, classExprRemove } from "../types";
 import { loadAllOntologies, saveOntology, deleteOntology as dbDelete, debounce } from "./persistence";
 import { buildUri, toPascalCase, toCamelCase, STANDARD_PREFIXES } from "./uri-utils";
 import { parseTurtle, buildModelFromTriples } from "./turtle-parser";
@@ -157,6 +158,99 @@ const OWL_VERSION_IRI = "http://www.w3.org/2002/07/owl#versionIRI";
 const OWL_VERSION_INFO = "http://www.w3.org/2002/07/owl#versionInfo";
 const DCT_CREATED = "http://purl.org/dc/terms/created";
 const DCT_MODIFIED = "http://purl.org/dc/terms/modified";
+const OWL_UNION_OF = "http://www.w3.org/2002/07/owl#unionOf";
+const RDF_FIRST = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
+const RDF_REST = "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest";
+const RDF_NIL = "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil";
+
+/**
+ * One-time migration: convert legacy `domainUri: string` and `ranges: string[]`
+ * to ClassExpression shape, hoisting blank-node owl:unionOf classes into
+ * union expressions on the properties that reference them.
+ *
+ * Safe to re-run — once the blank-node class is removed and shapes are
+ * already ClassExpression, the function is a no-op.
+ *
+ * Exported for unit tests.
+ */
+export function hoistClassExpressions(onto: Ontology): void {
+  // Build a list-cell map from unmappedTriples so we can resolve owl:unionOf lists
+  const firstMap = new Map<string, string>();
+  const restMap  = new Map<string, string>();
+  for (const t of onto.unmappedTriples) {
+    if (t.isLiteral) continue;
+    if (t.predicate === RDF_FIRST) firstMap.set(t.subject, t.object);
+    if (t.predicate === RDF_REST)  restMap.set(t.subject, t.object);
+  }
+  const resolveList = (head: string): string[] => {
+    const members: string[] = [];
+    const seen = new Set<string>();
+    let cur = head;
+    while (cur !== RDF_NIL) {
+      if (seen.has(cur)) break;
+      seen.add(cur);
+      const m = firstMap.get(cur);
+      if (m === undefined) break;
+      members.push(m);
+      cur = restMap.get(cur) ?? RDF_NIL;
+    }
+    return members;
+  };
+
+  // bnode class URI → union member URIs
+  const unionByBNode = new Map<string, string[]>();
+  const consumedListCells = new Set<string>();
+  for (const cls of onto.classes) {
+    if (!cls.uri.startsWith("_:")) continue;
+    const unionEt = cls.extraTriples.find((et) => !et.isLiteral && et.predicate === OWL_UNION_OF);
+    if (!unionEt) continue;
+    const members = resolveList(unionEt.object);
+    if (members.length === 0) continue;
+    unionByBNode.set(cls.uri, members);
+    // Mark list cells starting at unionEt.object as consumed
+    let cur = unionEt.object;
+    while (cur !== RDF_NIL && !consumedListCells.has(cur)) {
+      consumedListCells.add(cur);
+      cur = restMap.get(cur) ?? RDF_NIL;
+    }
+  }
+
+  /** Convert a legacy URI (possibly a blank-node union ref) to a ClassExpression. */
+  const toClassExpr = (uri: string): ClassExpression => {
+    const u = unionByBNode.get(uri);
+    if (u) return { kind: "union", uris: u };
+    return { kind: "class", uri };
+  };
+
+  // Migrate each property — legacy `domainUri` / array-of-string `ranges`
+  // get translated to ClassExpression. Already-migrated properties are
+  // detected by `domain` being defined and skipped.
+  for (const prop of onto.properties) {
+    const legacy = prop as unknown as { domainUri?: string; ranges?: unknown };
+    if (legacy.domainUri !== undefined && !(prop as Partial<OntologyProperty>).domain) {
+      prop.domain = toClassExpr(legacy.domainUri);
+      delete legacy.domainUri;
+    }
+    if (Array.isArray(legacy.ranges)) {
+      const arr = legacy.ranges as unknown[];
+      const allStrings = arr.every((r) => typeof r === "string");
+      if (allStrings) {
+        prop.ranges = (arr as string[]).map(toClassExpr);
+      }
+    }
+    if (!prop.domain) prop.domain = { kind: "class", uri: "" };
+    if (!Array.isArray(prop.ranges)) prop.ranges = [];
+  }
+
+  // Drop blank-node union classes — they no longer have a UI representation
+  if (unionByBNode.size > 0) {
+    onto.classes = onto.classes.filter((c) => !unionByBNode.has(c.uri));
+    onto.unmappedTriples = onto.unmappedTriples.filter((t) => {
+      if (consumedListCells.has(t.subject) && (t.predicate === RDF_FIRST || t.predicate === RDF_REST)) return false;
+      return true;
+    });
+  }
+}
 
 /**
  * One-time migration helper: hoist legacy skos:editorialNote and
@@ -297,8 +391,11 @@ export const useStore = create<EditorState>((set, get) => {
         map.set(cls.id, []);
       }
       for (const prop of onto.properties) {
-        if (prop.domainUri) {
-          const cls = onto.classes.find((c) => c.uri === prop.domainUri);
+        const uris = prop.domain.kind === "class"
+          ? (prop.domain.uri ? [prop.domain.uri] : [])
+          : prop.domain.uris;
+        for (const u of uris) {
+          const cls = onto.classes.find((c) => c.uri === u);
           if (cls) {
             const list = map.get(cls.id) || [];
             list.push(prop);
@@ -313,7 +410,13 @@ export const useStore = create<EditorState>((set, get) => {
       const onto = get().getActiveOntology();
       if (!onto) return [];
       const classUris = new Set(onto.classes.map((c) => c.uri));
-      return onto.properties.filter((p) => !p.domainUri || !classUris.has(p.domainUri));
+      return onto.properties.filter((p) => {
+        const uris = p.domain.kind === "class"
+          ? (p.domain.uri ? [p.domain.uri] : [])
+          : p.domain.uris;
+        if (uris.length === 0) return true;
+        return !uris.some((u) => classUris.has(u));
+      });
     },
 
     hasFileHandle: () => {
@@ -370,10 +473,10 @@ export const useStore = create<EditorState>((set, get) => {
         for (const prop of onto.properties) {
           if (!prop.extraTriples) prop.extraTriples = [];
           if (!prop.editorialNotes) prop.editorialNotes = [];
-          // Migrate v1 single range string → v2 ranges array
+          // Migrate v1 single range string → v2 ranges array (later turned into ClassExpression[] by hoistClassExpressions)
           if (!prop.ranges) {
             const legacy = (prop as unknown as { range?: string }).range;
-            prop.ranges = legacy ? [legacy] : [];
+            prop.ranges = legacy ? [legacy as unknown as ClassExpression] : [];
           }
           // inverseOf / cardinality are optional — undefined is fine, no migration needed
         }
@@ -387,6 +490,9 @@ export const useStore = create<EditorState>((set, get) => {
         // Sweep legacy storage: relocate skos:editorialNote and owl:versionIRI/versionInfo
         // out of extraTriples / unmappedTriples into the new typed fields. Idempotent.
         sweepLegacyTriples(onto);
+        // Hoist legacy domainUri / ranges (string) into ClassExpression shape and
+        // dissolve blank-node owl:unionOf classes. Idempotent.
+        hoistClassExpressions(onto);
       }
       set({
         ontologies,
@@ -593,12 +699,12 @@ export const useStore = create<EditorState>((set, get) => {
                 disjointWith: (c.disjointWith ?? []).map((u) => (u === oldUri ? newUri! : u)),
               };
             }),
-            // Cascade: update properties whose domain or range pointed at the old class URI
+            // Cascade: update properties whose domain or range mentioned the old class URI
             properties: uriChanged
               ? o.properties.map((p) => ({
                   ...p,
-                  domainUri: p.domainUri === oldUri ? newUri! : p.domainUri,
-                  ranges: (p.ranges ?? []).map((r) => r === oldUri ? newUri! : r),
+                  domain: classExprReplace(p.domain, oldUri!, newUri!),
+                  ranges: (p.ranges ?? []).map((r) => classExprReplace(r, oldUri!, newUri!)),
                 }))
               : o.properties,
           };
@@ -621,9 +727,14 @@ export const useStore = create<EditorState>((set, get) => {
                 ...c,
                 disjointWith: (c.disjointWith ?? []).filter((u) => u !== cls?.uri),
               })),
-            properties: o.properties.map((p) =>
-              cls && p.domainUri === cls.uri ? { ...p, domainUri: "" } : p
-            ),
+            properties: o.properties.map((p) => {
+              if (!cls) return p;
+              const newDomain = classExprRemove(p.domain, cls.uri) ?? { kind: "class" as const, uri: "" };
+              const newRanges = (p.ranges ?? [])
+                .map((r) => classExprRemove(r, cls.uri))
+                .filter((r): r is ClassExpression => r !== null);
+              return { ...p, domain: newDomain, ranges: newRanges };
+            }),
           };
         }),
       }));
@@ -651,7 +762,7 @@ export const useStore = create<EditorState>((set, get) => {
         editorialNotes: partial.editorialNotes || [],
         created: partial.created ?? now,
         modified: partial.modified ?? now,
-        domainUri: partial.domainUri || "",
+        domain: partial.domain ?? { kind: "class", uri: "" },
         ranges: partial.ranges ?? [],
         subPropertyOf: partial.subPropertyOf || [],
         inverseOf: partial.inverseOf,
@@ -924,7 +1035,10 @@ export const useStore = create<EditorState>((set, get) => {
       if (!onto) return;
       const cls = onto.classes.find((c) => c.id === classId);
       if (!cls) return;
-      const properties = onto.properties.filter((p) => p.domainUri === cls.uri);
+      const properties = onto.properties.filter((p) => {
+        if (p.domain.kind === "class") return p.domain.uri === cls.uri;
+        return p.domain.uris.includes(cls.uri);
+      });
       set({ clipboard: { type: "class", cls, properties } });
     },
 
@@ -981,12 +1095,25 @@ export const useStore = create<EditorState>((set, get) => {
         const newProperties: OntologyProperty[] = properties.map((prop) => {
           const { localName: pLocal, uri: pUri } = rebase(prop.localName);
           existingUris.add(pUri);
+          // Remap the property's domain so any reference to the source class URI now
+          // points at the freshly-created paste target. Union members are preserved.
+          const remappedDomain: ClassExpression = (() => {
+            if (prop.domain.kind === "class") {
+              return prop.domain.uri === cls.uri
+                ? { kind: "class", uri: newUri }
+                : prop.domain;
+            }
+            return {
+              kind: "union",
+              uris: prop.domain.uris.map((u) => (u === cls.uri ? newUri : u)),
+            };
+          })();
           return {
             ...prop,
             id: genId(),
             localName: pLocal,
             uri: pUri,
-            domainUri: newUri, // remap domain to the new class URI
+            domain: remappedDomain,
             created: stamp,
             modified: stamp,
           };
@@ -1008,8 +1135,12 @@ export const useStore = create<EditorState>((set, get) => {
       if (item.type === "property") {
         const { property } = item;
         const { localName: pLocal, uri: pUri } = rebase(property.localName);
-        const domainUri =
-          opts?.domainUri !== undefined ? opts.domainUri : property.domainUri;
+        // When the caller supplies opts.domainUri, replace the entire domain
+        // with a single class expression. Otherwise preserve the source domain
+        // (single class or union) unchanged.
+        const domain: ClassExpression = opts?.domainUri !== undefined
+          ? { kind: "class", uri: opts.domainUri }
+          : property.domain;
         const stamp = new Date().toISOString();
 
         const newProp: OntologyProperty = {
@@ -1017,7 +1148,7 @@ export const useStore = create<EditorState>((set, get) => {
           id: genId(),
           localName: pLocal,
           uri: pUri,
-          domainUri,
+          domain,
           created: stamp,
           modified: stamp,
         };

@@ -1,4 +1,10 @@
-import type { Ontology, OntologyClass, OntologyProperty } from "../types";
+import type { Ontology, OntologyClass, OntologyProperty, ClassExpression } from "../types";
+
+/** Stable stringification of a ClassExpression for equality comparison. */
+function classExprToKey(expr: ClassExpression): string {
+  if (expr.kind === "class") return expr.uri;
+  return `(${[...expr.uris].sort().join("∪")})`;
+}
 
 export type DiffStatus = "added" | "removed" | "modified" | "unchanged";
 
@@ -53,9 +59,11 @@ function diffProperty(left: OntologyProperty, right: OntologyProperty): string[]
   if (left.type !== right.type) changes.push(`Type: ${left.type} → ${right.type}`);
   if (labelKey(left.labels) !== labelKey(right.labels)) changes.push(`Labels changed`);
   if (labelKey(left.descriptions) !== labelKey(right.descriptions)) changes.push(`Descriptions changed`);
-  if (left.domainUri !== right.domainUri) changes.push(`Domain: ${left.domainUri || "(none)"} → ${right.domainUri || "(none)"}`);
-  const leftRanges  = [...(left.ranges  ?? [])].sort().join(",");
-  const rightRanges = [...(right.ranges ?? [])].sort().join(",");
+  const leftDomain  = classExprToKey(left.domain);
+  const rightDomain = classExprToKey(right.domain);
+  if (leftDomain !== rightDomain) changes.push(`Domain: ${leftDomain || "(none)"} → ${rightDomain || "(none)"}`);
+  const leftRanges  = [...(left.ranges  ?? [])].map(classExprToKey).sort().join(",");
+  const rightRanges = [...(right.ranges ?? [])].map(classExprToKey).sort().join(",");
   if (leftRanges !== rightRanges) changes.push(`Range: ${leftRanges || "(none)"} → ${rightRanges || "(none)"}`);
   if (left.inverseOf !== right.inverseOf) changes.push(`inverseOf changed`);
   if (left.minCardinality !== right.minCardinality) changes.push(`minCardinality: ${left.minCardinality ?? "—"} → ${right.minCardinality ?? "—"}`);

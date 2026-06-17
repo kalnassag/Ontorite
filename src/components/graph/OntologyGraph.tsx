@@ -18,6 +18,7 @@ import {
 import { X, ZoomIn, ZoomOut, Maximize2, RefreshCw, Plus, Pencil, Trash2, CirclePlus } from "lucide-react";
 import { useStore } from "../../lib/store";
 import { compact } from "../../lib/uri-utils";
+import { classExprFormat } from "../../types";
 import ClassForm from "../forms/ClassForm";
 import PropertyForm from "../forms/PropertyForm";
 
@@ -183,9 +184,17 @@ export default function OntologyGraph({ onClose }: Props) {
     const prefixes = activeOntology?.metadata.prefixes ?? {};
 
     // -- Nodes --
+    // Helpers: ClassExpression → list of URIs
+    const domainUrisOf = (p: typeof properties[number]): string[] =>
+      p.domain.kind === "class" ? (p.domain.uri ? [p.domain.uri] : []) : p.domain.uris;
+    const rangeUrisOf = (r: typeof properties[number]["ranges"][number]): string[] =>
+      r.kind === "class" ? [r.uri] : r.uris;
+
     const propCount = new Map<string, number>();
     for (const prop of properties) {
-      if (prop.domainUri) propCount.set(prop.domainUri, (propCount.get(prop.domainUri) ?? 0) + 1);
+      for (const u of domainUrisOf(prop)) {
+        propCount.set(u, (propCount.get(u) ?? 0) + 1);
+      }
     }
 
     // Preserve existing positions when rebuilding (e.g. after class edit)
@@ -205,8 +214,10 @@ export default function OntologyGraph({ onClose }: Props) {
     const dtypeUriSet = new Set<string>();
     if (showDatatypes) {
       for (const prop of properties) {
-        if (prop.type === "owl:DatatypeProperty" && prop.domainUri) {
-          for (const r of prop.ranges ?? []) dtypeUriSet.add(r);
+        if (prop.type !== "owl:DatatypeProperty") continue;
+        if (domainUrisOf(prop).length === 0) continue;
+        for (const r of prop.ranges ?? []) {
+          for (const u of rangeUrisOf(r)) dtypeUriSet.add(u);
         }
       }
     }
@@ -236,49 +247,68 @@ export default function OntologyGraph({ onClose }: Props) {
 
     const seenInverse = new Set<string>();
     for (const prop of properties) {
-      if (prop.type !== "owl:ObjectProperty" || !prop.domainUri || !(prop.ranges ?? []).length) continue;
-      const dom = classes.find((c) => c.uri === prop.domainUri);
-      if (!dom) continue;
+      if (prop.type !== "owl:ObjectProperty" || !(prop.ranges ?? []).length) continue;
+      const dUris = domainUrisOf(prop);
+      if (dUris.length === 0) continue;
 
-      for (const rangeUri of prop.ranges ?? []) {
-        const rng = classes.find((c) => c.uri === rangeUri);
-        if (!rng) continue;
+      for (const domUri of dUris) {
+        const dom = classes.find((c) => c.uri === domUri);
+        if (!dom) continue;
 
-        if (prop.inverseOf) {
-          const key = [prop.uri, prop.inverseOf].sort().join("|") + "-" + rng.id;
-          if (seenInverse.has(key)) continue;
-          seenInverse.add(key);
-          const invP   = properties.find((p) => p.uri === prop.inverseOf);
-          const invLbl = invP ? (invP.labels[0]?.value || invP.localName) : "inverse";
-          links.push({ id: `inv-${key}`, source: dom.id, target: rng.id, label: `${prop.labels[0]?.value || prop.localName} ⇌ ${invLbl}`, type: "inverseOf" });
-        } else {
-          const done = properties.some((p) => p.inverseOf === prop.uri && seenInverse.has([p.uri, prop.uri].sort().join("|") + "-" + rng.id));
-          if (done) continue;
-          links.push({ id: `obj-${prop.id}-${rng.id}`, source: dom.id, target: rng.id, label: prop.labels[0]?.value || prop.localName, type: "objectProperty" });
+        for (const rangeExpr of prop.ranges) {
+          for (const rangeUri of rangeUrisOf(rangeExpr)) {
+            const rng = classes.find((c) => c.uri === rangeUri);
+            if (!rng) continue;
+
+            if (prop.inverseOf) {
+              const key = [prop.uri, prop.inverseOf].sort().join("|") + "-" + dom.id + "-" + rng.id;
+              if (seenInverse.has(key)) continue;
+              seenInverse.add(key);
+              const invP   = properties.find((p) => p.uri === prop.inverseOf);
+              const invLbl = invP ? (invP.labels[0]?.value || invP.localName) : "inverse";
+              links.push({ id: `inv-${key}`, source: dom.id, target: rng.id, label: `${prop.labels[0]?.value || prop.localName} ⇌ ${invLbl}`, type: "inverseOf" });
+            } else {
+              const done = properties.some((p) => p.inverseOf === prop.uri && seenInverse.has([p.uri, prop.uri].sort().join("|") + "-" + dom.id + "-" + rng.id));
+              if (done) continue;
+              links.push({ id: `obj-${prop.id}-${dom.id}-${rng.id}`, source: dom.id, target: rng.id, label: prop.labels[0]?.value || prop.localName, type: "objectProperty" });
+            }
+          }
         }
       }
     }
 
     if (showDatatypes) {
       for (const prop of properties) {
-        if (prop.type !== "owl:DatatypeProperty" || !prop.domainUri || !(prop.ranges ?? []).length) continue;
-        const dom = classes.find((c) => c.uri === prop.domainUri);
-        if (!dom) continue;
-        for (const rangeUri of prop.ranges ?? []) {
-          links.push({ id: `dtype-${prop.id}-${rangeUri}`, source: dom.id, target: `dtype:${rangeUri}`, label: prop.labels[0]?.value || prop.localName, type: "datatypeProperty" });
+        if (prop.type !== "owl:DatatypeProperty" || !(prop.ranges ?? []).length) continue;
+        const dUris = domainUrisOf(prop);
+        if (dUris.length === 0) continue;
+        for (const domUri of dUris) {
+          const dom = classes.find((c) => c.uri === domUri);
+          if (!dom) continue;
+          for (const rangeExpr of prop.ranges) {
+            for (const rangeUri of rangeUrisOf(rangeExpr)) {
+              links.push({ id: `dtype-${prop.id}-${dom.id}-${rangeUri}`, source: dom.id, target: `dtype:${rangeUri}`, label: prop.labels[0]?.value || prop.localName, type: "datatypeProperty" });
+            }
+          }
         }
       }
     }
 
     if (showAnnotations) {
       for (const prop of properties) {
-        if (prop.type !== "owl:AnnotationProperty" || !prop.domainUri || !(prop.ranges ?? []).length) continue;
-        const dom = classes.find((c) => c.uri === prop.domainUri);
-        if (!dom) continue;
-        for (const rangeUri of prop.ranges ?? []) {
-          const rng = classes.find((c) => c.uri === rangeUri);
-          if (!rng) continue;
-          links.push({ id: `annot-${prop.id}-${rng.id}`, source: dom.id, target: rng.id, label: prop.labels[0]?.value || prop.localName, type: "annotationProperty" });
+        if (prop.type !== "owl:AnnotationProperty" || !(prop.ranges ?? []).length) continue;
+        const dUris = domainUrisOf(prop);
+        if (dUris.length === 0) continue;
+        for (const domUri of dUris) {
+          const dom = classes.find((c) => c.uri === domUri);
+          if (!dom) continue;
+          for (const rangeExpr of prop.ranges) {
+            for (const rangeUri of rangeUrisOf(rangeExpr)) {
+              const rng = classes.find((c) => c.uri === rangeUri);
+              if (!rng) continue;
+              links.push({ id: `annot-${prop.id}-${dom.id}-${rng.id}`, source: dom.id, target: rng.id, label: prop.labels[0]?.value || prop.localName, type: "annotationProperty" });
+            }
+          }
         }
       }
     }
@@ -924,8 +954,10 @@ export default function OntologyGraph({ onClose }: Props) {
         if (node.kind === "class") {
           const cls = classes.find((c) => c.id === node.id);
           const prefixes = activeOntology?.metadata.prefixes ?? {};
-          const ownDatatype = properties.filter((p) => p.type === "owl:DatatypeProperty" && p.domainUri === node.uri);
-          const ownAnnotation = properties.filter((p) => p.type === "owl:AnnotationProperty" && p.domainUri === node.uri);
+          const domainIncludes = (p: typeof properties[number]) =>
+            p.domain.kind === "class" ? p.domain.uri === node.uri : p.domain.uris.includes(node.uri);
+          const ownDatatype = properties.filter((p) => p.type === "owl:DatatypeProperty" && domainIncludes(p));
+          const ownAnnotation = properties.filter((p) => p.type === "owl:AnnotationProperty" && domainIncludes(p));
           return (
             <div className="pointer-events-none absolute bottom-3 left-3 max-w-sm rounded border border-th-border bg-th-surface px-3 py-2 shadow-lg">
               <div className="text-xs font-semibold text-th-fg">{node.label}</div>
@@ -940,7 +972,7 @@ export default function OntologyGraph({ onClose }: Props) {
                   </div>
                   <ul className="space-y-0.5">
                     {ownDatatype.map((p) => {
-                      const rng = (p.ranges ?? []).map((r) => compact(r, prefixes)).join(", ");
+                      const rng = (p.ranges ?? []).map((r) => classExprFormat(r, (u) => compact(u, prefixes))).join(", ");
                       return (
                         <li key={p.id} className="flex items-baseline gap-2 text-2xs">
                           <span className="text-th-fg">{p.labels[0]?.value || p.localName}</span>
