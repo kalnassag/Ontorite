@@ -46,6 +46,7 @@ export default function EditorialNotesDrawer({
           onChange={onChange}
           placeholder="Editorial note"
           multiline
+          rows={6}
         />
       </div>
     </Drawer>

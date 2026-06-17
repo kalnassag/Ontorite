@@ -13,9 +13,11 @@ interface Props {
   placeholder?: string;
   /** If true, renders a textarea for each value (for descriptions) */
   multiline?: boolean;
+  /** Textarea height in lines (only used when multiline). Default 2. */
+  rows?: number;
 }
 
-export default function LabelEditor({ values, onChange, placeholder = "Value", multiline = false }: Props) {
+export default function LabelEditor({ values, onChange, placeholder = "Value", multiline = false, rows = 2 }: Props) {
   const update = (index: number, patch: Partial<LangString>) => {
     onChange(values.map((v, i) => (i === index ? { ...v, ...patch } : v)));
   };
@@ -37,8 +39,8 @@ export default function LabelEditor({ values, onChange, placeholder = "Value", m
               value={entry.value}
               onChange={(e) => update(i, { value: e.target.value })}
               placeholder={placeholder}
-              rows={2}
-              className="flex-1 resize-none rounded bg-th-input px-2 py-1 text-xs text-th-fg placeholder-th-fg-4 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              rows={rows}
+              className="flex-1 resize-y rounded bg-th-input px-2 py-1 text-xs leading-relaxed text-th-fg placeholder-th-fg-4 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           ) : (
             <input

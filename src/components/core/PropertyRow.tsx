@@ -94,20 +94,29 @@ export default function PropertyRow({ property, onDelete }: Props) {
         )}
       </div>
 
-      {/* Actions (shown on hover) */}
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+      {/* Persistent editorial-notes chip (only when notes exist) */}
+      {noteCount > 0 && (
         <button
           onClick={() => setShowNotes(true)}
-          className={`relative rounded p-1 hover:text-amber-400 ${noteCount > 0 ? "text-amber-500 opacity-100" : "text-th-fg-4"}`}
-          title={noteCount > 0 ? `${noteCount} editorial note${noteCount === 1 ? "" : "s"}` : "Editorial notes"}
+          className="flex flex-shrink-0 items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-2xs font-medium text-amber-500 hover:bg-amber-500/25"
+          title={`${noteCount} editorial note${noteCount === 1 ? "" : "s"}`}
         >
-          <StickyNote size={11} />
-          {noteCount > 0 && (
-            <span className="absolute -right-1 -top-1 rounded-full bg-amber-500 px-1 text-[8px] font-bold leading-tight text-white">
-              {noteCount}
-            </span>
-          )}
+          <StickyNote size={10} />
+          {noteCount}
         </button>
+      )}
+
+      {/* Actions (shown on hover) */}
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+        {noteCount === 0 && (
+          <button
+            onClick={() => setShowNotes(true)}
+            className="rounded p-1 text-th-fg-4 hover:text-amber-400"
+            title="Add editorial notes"
+          >
+            <StickyNote size={11} />
+          </button>
+        )}
         <button
           onClick={() => copyProperty(property.id)}
           className="rounded p-1 text-th-fg-4 hover:text-purple-400"

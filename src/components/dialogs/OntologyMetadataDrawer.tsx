@@ -103,6 +103,7 @@ export default function OntologyMetadataDrawer({ open, onClose }: Props) {
             onChange={(notes) => updateMetadata({ editorialNotes: notes })}
             placeholder="Editorial note"
             multiline
+            rows={6}
           />
         </Field>
 
