@@ -373,7 +373,8 @@ export default function EntityGraph() {
             y={ly + 2}
             textAnchor="middle"
             fill="#6366f1"
-            fontSize={9}
+            fontSize={12}
+            fontWeight={500}
             fontFamily="IBM Plex Sans, sans-serif"
             opacity={0.9}
           >
@@ -477,7 +478,7 @@ export default function EntityGraph() {
           textAnchor="middle"
           dominantBaseline="middle"
           fill={isSelected ? "white" : "var(--th-fg)"}
-          fontSize={11}
+          fontSize={13}
           fontWeight={600}
           fontFamily="IBM Plex Sans, sans-serif"
           pointerEvents="none"

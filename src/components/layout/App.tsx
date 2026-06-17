@@ -13,6 +13,7 @@ import UnmappedTriplesTable from "../core/UnmappedTriplesTable";
 import ImportExport from "../core/ImportExport";
 import OntologyGraph from "../graph/OntologyGraph";
 import EntityGraph from "../graph/EntityGraph";
+import TreeGraph from "../graph/TreeGraph";
 import IndividualCard from "../core/IndividualCard";
 import ValidationPanel from "../core/ValidationPanel";
 import ClassBrowserPanel from "./ClassBrowserPanel";
@@ -25,7 +26,7 @@ import {
   Plus, Sun, Moon, Network, ChevronsDown, ChevronsUp, Layers, Users,
   ShieldCheck, Share2, PanelLeftClose, PanelLeftOpen, Clipboard, X,
   GitCompare, AlertCircle, AlertTriangle, RotateCcw, RotateCw, HelpCircle,
-  Info,
+  Info, GitFork,
 } from "lucide-react";
 import OntologyMetadataDrawer from "../dialogs/OntologyMetadataDrawer";
 
@@ -44,7 +45,7 @@ function useTheme() {
   return { dark, toggle: () => setDark((d) => !d) };
 }
 
-type ViewMode = "classes" | "individuals" | "graph" | "entity-graph" | "diff";
+type ViewMode = "classes" | "individuals" | "graph" | "tree" | "entity-graph" | "diff";
 
 export default function App() {
   const init = useStore((s) => s.init);
@@ -356,10 +357,22 @@ export default function App() {
                       ? "bg-blue-600 text-white"
                       : "text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
                   }`}
-                  title="Class graph view"
+                  title="Force-directed class graph"
                 >
                   <Network size={12} />
                   Graph
+                </button>
+                <button
+                  onClick={() => setViewMode("tree")}
+                  className={`flex items-center gap-1 border-l border-th-border-muted px-2 py-1 text-2xs font-medium ${
+                    viewMode === "tree"
+                      ? "bg-blue-600 text-white"
+                      : "text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
+                  }`}
+                  title="Branching tree of the class hierarchy"
+                >
+                  <GitFork size={12} />
+                  Tree
                 </button>
                 <button
                   onClick={() => setViewMode("entity-graph")}
@@ -523,6 +536,10 @@ export default function App() {
             ) : viewMode === "graph" ? (
               <div className="relative flex-1 overflow-hidden">
                 <OntologyGraph onClose={() => setViewMode("classes")} />
+              </div>
+            ) : viewMode === "tree" ? (
+              <div className="relative flex-1 overflow-hidden">
+                <TreeGraph onClose={() => setViewMode("classes")} />
               </div>
             ) : viewMode === "entity-graph" ? (
               <div className="relative flex-1 overflow-hidden">

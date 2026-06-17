@@ -37,9 +37,17 @@ const V = {
 } as const;
 
 const FONT         = "Helvetica, Arial, sans-serif";
-const CLASS_R_BASE = 44;
-const DTYPE_W      = 86;
-const DTYPE_H      = 26;
+const CLASS_R_BASE = 52;
+const DTYPE_W      = 112;
+const DTYPE_H      = 32;
+
+// Centralised text sizes — adjust here if labels get crowded
+const FS_EDGE  = 12; // relationship labels
+const FS_CLASS = 14; // class node name
+const FS_META  = 11; // "N props" subtitle
+const FS_DTYPE = 13; // datatype node text
+// Character-width estimate at the edge font size (used to size label boxes)
+const EDGE_CHAR_W = FS_EDGE * 0.55;
 
 // ── Types ─────────────────────────────────────────────────────────
 type EdgeType =
@@ -579,7 +587,7 @@ export default function OntologyGraph({ onClose }: Props) {
 
       const trunc = (s: string, n: number) => s.length > n ? s.slice(0, n - 1) + "…" : s;
       const lbl = trunc(link.label, 18);
-      const bgW = lbl.length * 5.2 + 10;
+      const bgW = lbl.length * EDGE_CHAR_W + 14;
 
       return (
         <g key={link.id} data-link-id={link.id}>
@@ -597,8 +605,8 @@ export default function OntologyGraph({ onClose }: Props) {
           />
           {link.type !== "subClassOf" && (
             <g>
-              <rect x={lx - bgW / 2} y={ly - 7} width={bgW} height={13} rx={3} fill={boxBg} opacity={0.93} />
-              <text x={lx} y={ly + 2} textAnchor="middle" fill={boxText} fontSize={9} fontFamily={FONT} fontWeight={500}>{lbl}</text>
+              <rect x={lx - bgW / 2} y={ly - 9} width={bgW} height={18} rx={3} fill={boxBg} opacity={0.93} />
+              <text x={lx} y={ly + 4} textAnchor="middle" fill={boxText} fontSize={FS_EDGE} fontFamily={FONT} fontWeight={500}>{lbl}</text>
             </g>
           )}
         </g>
@@ -648,23 +656,23 @@ export default function OntologyGraph({ onClose }: Props) {
       if (link.type === "inverseOf") {
         const parts = link.label.split(" ⇌ ");
         const fwd = trunc(parts[0] ?? "", 16), inv = trunc(parts[1] ?? "", 16);
-        const bgW = Math.max(fwd.length, inv.length + 2) * 5.2 + 12;
+        const bgW = Math.max(fwd.length, inv.length + 2) * EDGE_CHAR_W + 14;
         labelEl = (
           <g>
-            <rect x={lx - bgW / 2} y={ly - 15} width={bgW} height={22} rx={3} fill={boxBg} opacity={0.93} />
-            <text textAnchor="middle" fill={boxText} fontSize={9} fontFamily={FONT} fontWeight={500}>
+            <rect x={lx - bgW / 2} y={ly - 19} width={bgW} height={30} rx={3} fill={boxBg} opacity={0.93} />
+            <text textAnchor="middle" fill={boxText} fontSize={FS_EDGE} fontFamily={FONT} fontWeight={500}>
               <tspan x={lx} y={ly - 5}>{fwd}</tspan>
-              <tspan x={lx} dy={11}>⇌ {inv}</tspan>
+              <tspan x={lx} dy={15}>⇌ {inv}</tspan>
             </text>
           </g>
         );
       } else {
         const lbl = trunc(link.label, 18);
-        const bgW = lbl.length * 5.2 + 10;
+        const bgW = lbl.length * EDGE_CHAR_W + 14;
         labelEl = (
           <g>
-            <rect x={lx - bgW / 2} y={ly - 10} width={bgW} height={13} rx={3} fill={boxBg} opacity={0.93} />
-            <text x={lx} y={ly - 1} textAnchor="middle" fill={boxText} fontSize={9} fontFamily={FONT} fontWeight={500}>{lbl}</text>
+            <rect x={lx - bgW / 2} y={ly - 13} width={bgW} height={18} rx={3} fill={boxBg} opacity={0.93} />
+            <text x={lx} y={ly - 1} textAnchor="middle" fill={boxText} fontSize={FS_EDGE} fontFamily={FONT} fontWeight={500}>{lbl}</text>
           </g>
         );
       }
@@ -726,9 +734,9 @@ export default function OntologyGraph({ onClose }: Props) {
     const isPinned = node.fx != null;
 
     // Wrap label to fit inside circle
-    const lines   = wrapLabel(node.label, r, 12);
+    const lines   = wrapLabel(node.label, r, FS_CLASS);
     const nLines  = lines.length;
-    const lineH   = 14; // px between baselines
+    const lineH   = 17; // px between baselines (was 14, bigger for FS_CLASS=14)
     const hasProps = node.propertyCount > 0;
     // Shift text block up slightly when property count is shown below
     const blockTopY = y - ((nLines - 1) * lineH) / 2 - (hasProps ? lineH * 0.4 : 0);
@@ -744,13 +752,13 @@ export default function OntologyGraph({ onClose }: Props) {
           <text key={i}
             x={x} y={blockTopY + i * lineH}
             textAnchor="middle" dominantBaseline="middle"
-            fill={V.classText} fontSize={12} fontWeight={600} fontFamily={FONT} pointerEvents="none">
+            fill={V.classText} fontSize={FS_CLASS} fontWeight={600} fontFamily={FONT} pointerEvents="none">
             {line}
           </text>
         ))}
         {hasProps && (
           <text x={x} y={blockTopY + nLines * lineH - 2} textAnchor="middle" dominantBaseline="middle"
-            fill="#3355aa" fontSize={9} fontFamily={FONT} pointerEvents="none">
+            fill="#3355aa" fontSize={FS_META} fontFamily={FONT} pointerEvents="none">
             {node.propertyCount} prop{node.propertyCount !== 1 ? "s" : ""}
           </text>
         )}
@@ -768,7 +776,7 @@ export default function OntologyGraph({ onClose }: Props) {
     const x = node.x ?? 0, y = node.y ?? 0;
     const hw = DTYPE_W / 2, hh = DTYPE_H / 2;
     const isHov = hoveredId === node.id;
-    const lbl = node.label.length > 14 ? node.label.slice(0, 13) + "…" : node.label;
+    const lbl = node.label.length > 16 ? node.label.slice(0, 15) + "…" : node.label;
     return (
       <g key={node.id} data-node-id={node.id}
         style={{ cursor: "grab" }}
@@ -778,7 +786,7 @@ export default function OntologyGraph({ onClose }: Props) {
         <rect x={x - hw} y={y - hh} width={DTYPE_W} height={DTYPE_H} rx={4}
           fill={V.dtypeFill} stroke={isHov ? V.dtypeStroke : "#447722"} strokeWidth={isHov ? 2.5 : 2} />
         <text x={x} y={y} textAnchor="middle" dominantBaseline="middle"
-          fill={V.dtypeText} fontSize={11} fontFamily={FONT} fontWeight={500} pointerEvents="none">
+          fill={V.dtypeText} fontSize={FS_DTYPE} fontFamily={FONT} fontWeight={500} pointerEvents="none">
           {lbl}
         </text>
       </g>
@@ -915,11 +923,49 @@ export default function OntologyGraph({ onClose }: Props) {
         if (!node) return null;
         if (node.kind === "class") {
           const cls = classes.find((c) => c.id === node.id);
+          const prefixes = activeOntology?.metadata.prefixes ?? {};
+          const ownDatatype = properties.filter((p) => p.type === "owl:DatatypeProperty" && p.domainUri === node.uri);
+          const ownAnnotation = properties.filter((p) => p.type === "owl:AnnotationProperty" && p.domainUri === node.uri);
           return (
-            <div className="pointer-events-none absolute bottom-3 left-3 rounded border border-th-border bg-th-surface px-3 py-2 shadow-lg">
+            <div className="pointer-events-none absolute bottom-3 left-3 max-w-sm rounded border border-th-border bg-th-surface px-3 py-2 shadow-lg">
               <div className="text-xs font-semibold text-th-fg">{node.label}</div>
-              <div className="font-mono text-2xs text-th-fg-3">{node.uri}</div>
-              {cls?.descriptions[0]?.value && <div className="mt-1 max-w-xs text-2xs text-th-fg-2">{cls.descriptions[0].value}</div>}
+              <div className="truncate font-mono text-2xs text-th-fg-3">{node.uri}</div>
+              {cls?.descriptions[0]?.value && (
+                <div className="mt-1 text-2xs text-th-fg-2">{cls.descriptions[0].value}</div>
+              )}
+              {ownDatatype.length > 0 && (
+                <div className="mt-2">
+                  <div className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-prop-datatype-500">
+                    Datatype properties
+                  </div>
+                  <ul className="space-y-0.5">
+                    {ownDatatype.map((p) => {
+                      const rng = (p.ranges ?? []).map((r) => compact(r, prefixes)).join(", ");
+                      return (
+                        <li key={p.id} className="flex items-baseline gap-2 text-2xs">
+                          <span className="text-th-fg">{p.labels[0]?.value || p.localName}</span>
+                          {rng && <span className="font-mono text-th-fg-4">{rng}</span>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+              {ownAnnotation.length > 0 && (
+                <div className="mt-2">
+                  <div className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-prop-annotation-500">
+                    Annotation properties
+                  </div>
+                  <ul className="space-y-0.5">
+                    {ownAnnotation.map((p) => (
+                      <li key={p.id} className="text-2xs text-th-fg">{p.labels[0]?.value || p.localName}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {ownDatatype.length === 0 && ownAnnotation.length === 0 && (
+                <div className="mt-1 text-2xs italic text-th-fg-4">No datatype or annotation properties on this class.</div>
+              )}
             </div>
           );
         }
