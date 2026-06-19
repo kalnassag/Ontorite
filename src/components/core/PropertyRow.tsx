@@ -85,7 +85,7 @@ export default function PropertyRow({ property, onDelete, viewedFromClassUri }: 
           )}
           {unionCompanions.length > 0 && (
             <span
-              className="rounded bg-blue-500/15 px-1.5 py-0.5 text-2xs font-medium text-blue-400"
+              className="rounded bg-blue-100 px-1.5 py-0.5 text-2xs font-medium text-blue-700 dark:bg-blue-500/15 dark:text-blue-400"
               title={`This property is shared via owl:unionOf with: ${unionCompanions.join(", ")}`}
             >
               ∪ also: {unionCompanions.join(", ")}
@@ -126,7 +126,7 @@ export default function PropertyRow({ property, onDelete, viewedFromClassUri }: 
       {noteCount > 0 && (
         <button
           onClick={() => setShowNotes(true)}
-          className="flex flex-shrink-0 items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-2xs font-medium text-amber-500 hover:bg-amber-500/25"
+          className="flex flex-shrink-0 items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-2xs font-medium text-amber-800 hover:bg-amber-200 dark:bg-amber-500/15 dark:text-amber-500 dark:hover:bg-amber-500/25"
           title={`${noteCount} editorial note${noteCount === 1 ? "" : "s"}`}
         >
           <StickyNote size={10} />

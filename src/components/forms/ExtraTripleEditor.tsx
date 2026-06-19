@@ -56,8 +56,8 @@ export default function ExtraTripleEditor({ values, onChange }: Props) {
             onClick={() => update(i, { isLiteral: !entry.isLiteral, lang: entry.isLiteral ? undefined : entry.lang })}
             className={`flex-shrink-0 rounded px-1.5 py-1 text-2xs font-medium ${
               entry.isLiteral
-                ? "bg-green-600/20 text-green-500"
-                : "bg-blue-600/20 text-blue-400"
+                ? "bg-green-100 text-green-800 dark:bg-green-600/20 dark:text-green-500"
+                : "bg-blue-100 text-blue-800 dark:bg-blue-600/20 dark:text-blue-400"
             }`}
             title={entry.isLiteral ? "Literal value — click for URI" : "URI reference — click for literal"}
           >

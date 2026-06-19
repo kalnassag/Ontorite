@@ -214,7 +214,7 @@ export default function ClassForm({ existing, onDone }: Props) {
             <label className="mb-1 block text-2xs font-medium uppercase tracking-wide text-th-fg-3">
               subClassOf
               {subClassOf.length > 0 && (
-                <span className="ml-1.5 rounded bg-blue-600/20 px-1.5 text-2xs font-normal text-blue-400">{subClassOf.length}</span>
+                <span className="ml-1.5 rounded bg-blue-100 px-1.5 text-2xs font-normal text-blue-700 dark:bg-blue-600/20 dark:text-blue-400">{subClassOf.length}</span>
               )}
             </label>
             {classPickerMode === "pills" ? (
@@ -244,7 +244,7 @@ export default function ClassForm({ existing, onDone }: Props) {
                     {subClassOf.map((uri) => {
                       const cls = parentOptions.find((c) => c.uri === uri);
                       return (
-                        <span key={uri} className="flex items-center gap-1 rounded-full bg-blue-700/30 px-2 py-0.5 text-2xs text-blue-300">
+                        <span key={uri} className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-2xs text-blue-800 dark:bg-blue-700/30 dark:text-blue-300">
                           {cls?.labels[0]?.value || cls?.localName || uri.split(/[#/]/).pop()}
                           <button onClick={() => toggleParent(uri)} className="opacity-60 hover:opacity-100">×</button>
                         </span>
@@ -278,7 +278,7 @@ export default function ClassForm({ existing, onDone }: Props) {
             <label className="mb-1 block text-2xs font-medium uppercase tracking-wide text-th-fg-3">
               owl:disjointWith
               {disjointWith.length > 0 && (
-                <span className="ml-1.5 rounded bg-red-600/20 px-1.5 text-2xs font-normal text-red-400">{disjointWith.length}</span>
+                <span className="ml-1.5 rounded bg-red-100 px-1.5 text-2xs font-normal text-red-700 dark:bg-red-600/20 dark:text-red-400">{disjointWith.length}</span>
               )}
             </label>
             {classPickerMode === "pills" ? (
@@ -307,7 +307,7 @@ export default function ClassForm({ existing, onDone }: Props) {
                     {disjointWith.map((uri) => {
                       const cls = parentOptions.find((c) => c.uri === uri);
                       return (
-                        <span key={uri} className="flex items-center gap-1 rounded-full bg-red-700/30 px-2 py-0.5 text-2xs text-red-300">
+                        <span key={uri} className="flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-2xs text-red-800 dark:bg-red-700/30 dark:text-red-300">
                           {cls?.labels[0]?.value || cls?.localName || uri.split(/[#/]/).pop()}
                           <button onClick={() => toggleDisjoint(uri)} className="opacity-60 hover:opacity-100">×</button>
                         </span>

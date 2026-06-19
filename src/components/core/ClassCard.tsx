@@ -144,7 +144,7 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
                 {(cls.disjointWith ?? []).map((uri, i) => {
                   const disjCls = allClasses.find((c) => c.uri === uri);
                   return (
-                    <span key={i} className="rounded bg-red-950/40 px-1 text-2xs text-red-400">
+                    <span key={i} className="rounded bg-red-100 px-1 text-2xs text-red-800 dark:bg-red-950/40 dark:text-red-400">
                       {disjCls?.labels[0]?.value || compact(uri, prefixes)}
                     </span>
                   );
@@ -164,7 +164,7 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
           {noteCount > 0 && (
             <button
               onClick={() => setShowNotes(true)}
-              className="flex flex-shrink-0 items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-2xs font-medium text-amber-500 hover:bg-amber-500/25"
+              className="flex flex-shrink-0 items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-2xs font-medium text-amber-800 hover:bg-amber-200 dark:bg-amber-500/15 dark:text-amber-500 dark:hover:bg-amber-500/25"
               title={`${noteCount} editorial note${noteCount === 1 ? "" : "s"}`}
             >
               <StickyNote size={10} />

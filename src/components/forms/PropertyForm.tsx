@@ -276,7 +276,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
         <label className="mb-1 flex items-center gap-2 text-2xs font-medium uppercase tracking-wide text-th-fg-3">
           Domain
           {domainUris.length > 1 && (
-            <span className="rounded bg-blue-500/15 px-1.5 py-0.5 font-normal normal-case text-blue-400">
+            <span className="rounded bg-blue-100 px-1.5 py-0.5 font-normal normal-case text-blue-700 dark:bg-blue-500/15 dark:text-blue-400">
               owl:unionOf of {domainUris.length} classes
             </span>
           )}
@@ -290,7 +290,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
                 return (
                   <span
                     key={uri}
-                    className="flex items-center gap-1 rounded-full bg-blue-700/30 px-2 py-0.5 text-2xs text-blue-300"
+                    className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-2xs text-blue-800 dark:bg-blue-700/30 dark:text-blue-300"
                   >
                     {label}
                     <button
@@ -329,7 +329,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
         <label className="mb-1 block text-2xs font-medium uppercase tracking-wide text-th-fg-3">
           Range
           {ranges.length > 0 && (
-            <span className="ml-1.5 rounded bg-blue-600/20 px-1.5 text-2xs font-normal text-blue-400">
+            <span className="ml-1.5 rounded bg-blue-100 px-1.5 text-2xs font-normal text-blue-700 dark:bg-blue-600/20 dark:text-blue-400">
               {ranges.length} selected
             </span>
           )}
@@ -342,7 +342,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
                 {ranges.map((r) => (
                   <span
                     key={rangeKey(r)}
-                    className="flex items-center gap-1 rounded-full bg-blue-700/30 px-2 py-0.5 text-2xs text-blue-300"
+                    className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-2xs text-blue-800 dark:bg-blue-700/30 dark:text-blue-300"
                     title={r.kind === "union" ? `owl:unionOf (${r.uris.length} classes)` : undefined}
                   >
                     {formatRangeChip(r)}
@@ -378,7 +378,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
                 {ranges.map((r) => (
                   <span
                     key={rangeKey(r)}
-                    className="flex items-center gap-1 rounded-full bg-emerald-700/30 px-2 py-0.5 text-2xs text-emerald-300"
+                    className="flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-2xs text-emerald-800 dark:bg-emerald-700/30 dark:text-emerald-300"
                   >
                     {formatRangeChip(r)}
                     <button
@@ -439,7 +439,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
             <label className="text-2xs font-medium uppercase tracking-wide text-th-fg-3">
               subPropertyOf
               {subPropertyOf.length > 0 && (
-                <span className="ml-1.5 rounded bg-blue-600/20 px-1.5 text-2xs font-normal text-blue-400">{subPropertyOf.length}</span>
+                <span className="ml-1.5 rounded bg-blue-100 px-1.5 text-2xs font-normal text-blue-700 dark:bg-blue-600/20 dark:text-blue-400">{subPropertyOf.length}</span>
               )}
             </label>
             <div className="flex overflow-hidden rounded border border-th-border text-2xs">
@@ -480,7 +480,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
                   {subPropertyOf.map((uri) => {
                     const p = sameTypeProps.find((sp) => sp.uri === uri);
                     return (
-                      <span key={uri} className="flex items-center gap-1 rounded-full bg-blue-700/30 px-2 py-0.5 text-2xs text-blue-300">
+                      <span key={uri} className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-2xs text-blue-800 dark:bg-blue-700/30 dark:text-blue-300">
                         {p?.labels[0]?.value || p?.localName || uri.split(/[#/]/).pop()}
                         <button onClick={() => toggleSubPropOf(uri)} className="opacity-60 hover:opacity-100">×</button>
                       </span>

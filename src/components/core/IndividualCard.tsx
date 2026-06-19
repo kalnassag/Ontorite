@@ -179,7 +179,7 @@ export default function IndividualCard({ individual, defaultExpanded = false }: 
             <div className="flex flex-wrap items-baseline gap-2">
               <span className="text-base font-semibold text-th-fg">{individual.localName}</span>
               {typeLabels.map(({ uri, label }) => (
-                <span key={uri} className="rounded bg-purple-500/15 px-1.5 py-0.5 text-xs font-medium text-purple-400 ring-1 ring-inset ring-purple-500/25">
+                <span key={uri} className="rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-800 ring-1 ring-inset ring-purple-300 dark:bg-purple-500/15 dark:text-purple-400 dark:ring-purple-500/25">
                   {label}
                 </span>
               ))}
@@ -190,7 +190,7 @@ export default function IndividualCard({ individual, defaultExpanded = false }: 
           {noteCount > 0 && (
             <button
               onClick={() => setShowNotes(true)}
-              className="flex flex-shrink-0 items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-2xs font-medium text-amber-500 hover:bg-amber-500/25"
+              className="flex flex-shrink-0 items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-2xs font-medium text-amber-800 hover:bg-amber-200 dark:bg-amber-500/15 dark:text-amber-500 dark:hover:bg-amber-500/25"
               title={`${noteCount} editorial note${noteCount === 1 ? "" : "s"}`}
             >
               <StickyNote size={10} />

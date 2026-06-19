@@ -167,7 +167,7 @@ const UnmappedTriplesTable = forwardRef<HTMLDivElement>(function UnmappedTriples
               <button
                 onClick={() => updateUnmappedTriple(idx, { isLiteral: !triple.isLiteral })}
                 className={`w-12 rounded px-1 py-0.5 text-2xs font-medium ${
-                  triple.isLiteral ? "bg-green-600/20 text-green-500" : "bg-blue-600/20 text-blue-400"
+                  triple.isLiteral ? "bg-green-100 text-green-800 dark:bg-green-600/20 dark:text-green-500" : "bg-blue-100 text-blue-800 dark:bg-blue-600/20 dark:text-blue-400"
                 }`}
                 title={triple.isLiteral ? "Literal — click for URI" : "URI — click for literal"}
               >
