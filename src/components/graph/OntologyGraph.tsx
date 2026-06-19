@@ -155,8 +155,8 @@ export default function OntologyGraph({ onClose }: Props) {
   // Kept for legacy double-click path but now superseded by floatingPanel
   const [editingClassId,   setEditingClassId]    = useState<string | null>(null);
   const [editPanelPos]                           = useState({ x: 0, y: 0 });
-  const [showDatatypes,    setShowDatatypes]     = useState(true);
-  const [showAnnotations,  setShowAnnotations]   = useState(true);
+  const [showDatatypes,    setShowDatatypes]     = useState(false);
+  const [showAnnotations,  setShowAnnotations]   = useState(false);
   const [contextMenu,      setContextMenu]       = useState<ContextMenu | null>(null);
   const [floatingPanel,    setFloatingPanel]     = useState<FloatingPanel | null>(null);
 
