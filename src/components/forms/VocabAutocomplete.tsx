@@ -20,7 +20,19 @@ export interface LocalSuggestion {
 
 interface Props {
   value: string;
-  onChange: (uri: string) => void;
+  /**
+   * Fires on every keystroke. Use this when the parent wants to mirror the
+   * text the user is typing (e.g. a search box). Does NOT fire on commit —
+   * use `onPick` for "the user chose this value" semantics.
+   */
+  onChange: (text: string) => void;
+  /**
+   * Fires when the user commits a value — either by clicking a suggestion,
+   * pressing Enter on the highlighted suggestion, or pressing Enter on
+   * free text. This is the right handler for "add a chip" or "set this
+   * field" actions, since it will NOT fire per keystroke.
+   */
+  onPick?: (value: string) => void;
   filter?: VocabFilter;
   placeholder?: string;
   /** In-ontology entries to merge into the suggestion list. */
@@ -45,6 +57,7 @@ type Suggestion =
 export default function VocabAutocomplete({
   value,
   onChange,
+  onPick,
   filter,
   placeholder = "Type to search…",
   localEntries = [],
@@ -134,9 +147,12 @@ export default function VocabAutocomplete({
       s.source === "vocab" && outputAs === "compact"
         ? `${s.entry.prefix}:${s.entry.localName}`
         : s.entry.uri;
-    onChange(emitted);
     setQuery(emitted);
     setOpen(false);
+    // Commit via onPick if available; otherwise fall back to onChange so old
+    // single-handler call sites keep working.
+    if (onPick) onPick(emitted);
+    else onChange(emitted);
   };
 
   const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -153,11 +169,14 @@ export default function VocabAutocomplete({
     } else if (e.key === "Enter") {
       e.preventDefault();
       const pick = suggestions[highlight];
-      if (pick) select(pick);
-      else {
-        // Accept the free-text value as-is
-        onChange(query.trim());
+      if (pick) {
+        select(pick);
+      } else {
+        // Accept the free-text value as a commit
+        const v = query.trim();
         setOpen(false);
+        if (onPick) onPick(v);
+        else onChange(v);
       }
     } else if (e.key === "Escape") {
       e.preventDefault();

@@ -254,7 +254,8 @@ export default function ClassForm({ existing, onDone }: Props) {
                 )}
                 <VocabAutocomplete
                   value=""
-                  onChange={(val) => {
+                  onChange={() => { /* per-keystroke noise — ignore */ }}
+                  onPick={(val) => {
                     if (val && !subClassOf.includes(val)) toggleParent(val);
                   }}
                   filter={{ kinds: ["class"] }}

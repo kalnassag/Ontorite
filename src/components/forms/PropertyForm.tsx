@@ -305,7 +305,8 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
           )}
           <VocabAutocomplete
             value=""
-            onChange={(val) => {
+            onChange={() => { /* per-keystroke noise — ignore */ }}
+            onPick={(val) => {
               const v = val.trim();
               if (v && !domainUris.includes(v)) setDomainUris((prev) => [...prev, v]);
             }}
@@ -356,13 +357,8 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
             )}
             <VocabAutocomplete
               value={rangeInput}
-              onChange={(val) => {
-                if (val && !rangeHasUri(val) && val !== rangeInput) {
-                  addSingleRange(val);
-                } else {
-                  setRangeInput(val);
-                }
-              }}
+              onChange={setRangeInput}
+              onPick={addSingleRange}
               filter={{ kinds: ["class"] }}
               localEntries={allClasses
                 .filter((c) => !rangeHasUri(c.uri))
@@ -396,13 +392,8 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
             )}
             <VocabAutocomplete
               value={rangeInput}
-              onChange={(val) => {
-                if (val && !rangeHasUri(val) && val !== rangeInput) {
-                  addSingleRange(val);
-                } else {
-                  setRangeInput(val);
-                }
-              }}
+              onChange={setRangeInput}
+              onPick={addSingleRange}
               filter={{ kinds: ["datatype"] }}
               placeholder="Add XSD type (type to search)…"
             />
@@ -427,13 +418,8 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
             )}
             <VocabAutocomplete
               value={rangeInput}
-              onChange={(val) => {
-                if (val && !rangeHasUri(val) && val !== rangeInput) {
-                  addSingleRange(val);
-                } else {
-                  setRangeInput(val);
-                }
-              }}
+              onChange={setRangeInput}
+              onPick={addSingleRange}
               localEntries={allClasses.map((c): LocalSuggestion => ({
                 uri: c.uri,
                 localName: c.localName,
