@@ -27,16 +27,33 @@ export function namespace(uri: string): string {
   return "";
 }
 
-/** Compact a full URI to prefixed form using a prefix map. Returns <uri> if no prefix matches. */
+// Conservative subsets of the Turtle PN_PREFIX / PN_LOCAL grammar. Anything
+// outside them (slashes, parentheses, trailing dots, …) falls back to <IRI>
+// so the output is always valid Turtle.
+const PN_PREFIX_RE = /^([A-Za-z\u00C0-\uFFFF]([A-Za-z0-9_\-.\u00B7\u00C0-\uFFFF]*[A-Za-z0-9_\-\u00B7\u00C0-\uFFFF])?)?$/;
+const PN_LOCAL_RE = /^([A-Za-z0-9_\u00C0-\uFFFF]([A-Za-z0-9_\-.\u00B7\u00C0-\uFFFF]*[A-Za-z0-9_\-\u00B7\u00C0-\uFFFF])?)?$/;
+
+/** Wrap a URI as a Turtle IRIREF, escaping characters IRIREF forbids. */
+export function iriRef(uri: string): string {
+  const escaped = uri.replace(/[\u0000-\u0020<>"{}|^`\\]/g, (ch) =>
+    "\\u" + ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0"));
+  return `<${escaped}>`;
+}
+
+/**
+ * Compact a full URI to prefixed form using a prefix map. Picks the longest
+ * matching namespace whose remainder is a valid local name; returns <uri>
+ * otherwise. Blank nodes (`_:x`) are returned unchanged.
+ */
 export function compact(uri: string, prefixes: Record<string, string>): string {
-  if (uri.startsWith("_:")) return uri; // blank node — never wrap in angle brackets
+  if (uri.startsWith("_:")) return uri;
+  let best: { prefix: string; ns: string } | null = null;
   for (const [prefix, ns] of Object.entries(prefixes)) {
-    if (uri.startsWith(ns)) {
-      const local = uri.slice(ns.length);
-      return prefix ? `${prefix}:${local}` : `:${local}`;
-    }
+    if (!ns || !uri.startsWith(ns) || (best && ns.length <= best.ns.length)) continue;
+    if (!PN_PREFIX_RE.test(prefix) || !PN_LOCAL_RE.test(uri.slice(ns.length))) continue;
+    best = { prefix, ns };
   }
-  return `<${uri}>`;
+  return best ? `${best.prefix}:${uri.slice(best.ns.length)}` : iriRef(uri);
 }
 
 /** Expand a prefixed name to a full URI. Returns the input unchanged if prefix not found. */

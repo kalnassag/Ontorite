@@ -92,7 +92,7 @@ export async function serializeFromOntology(
   switch (format) {
     case "ntriples": {
       const mod = await import("./ntriples");
-      return mod.serializeNTriples(turtle, ontology.metadata.prefixes);
+      return mod.serializeNTriples(turtle);
     }
     case "jsonld": {
       const mod = await import("./jsonld");

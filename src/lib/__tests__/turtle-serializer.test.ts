@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseTurtle, buildModelFromTriples } from '../turtle-parser';
+import { parseTurtle } from '../turtle-parser';
+import { buildModelFromTriples } from '../model-builder';
 import { serializeToTurtle } from '../turtle-serializer';
 import * as fs from 'fs';
 
@@ -80,8 +81,10 @@ describe('Editorial notes + version round-trip', () => {
     const serialized = serializeToTurtle(ontology1);
 
     // Each editorialNote line should appear exactly once per source occurrence
-    const editorialMatches = serialized.match(/skos:editorialNote/g) ?? [];
-    expect(editorialMatches.length).toBe(4); // 1 ontology + 2 class + 1 property
+    // (same-predicate objects are grouped with ',' so count the note values)
+    for (const note of ['Ontology-level review needed.', 'Subclass of Animal?', 'Reviewed.', 'Should this allow lang variants?']) {
+      expect(serialized.split(`"${note}"@en`)).toHaveLength(2);
+    }
     expect(serialized.match(/owl:versionIRI/g)).toHaveLength(1);
     expect(serialized.match(/owl:versionInfo/g)).toHaveLength(1);
 
@@ -272,5 +275,24 @@ describe('owl:unionOf collection round-trip', () => {
     expect(allMembers).toContain('http://example.org/B');
     expect(allMembers).toContain('http://example.org/C');
     expect(allMembers).toContain('http://example.org/D');
+  });
+});
+
+describe('property cardinality', () => {
+  it('reads legacy property-level cardinality and exports it as an OWL restriction on the domain', () => {
+    const legacy = `
+      @prefix : <http://example.org/> .
+      @prefix owl: <http://www.w3.org/2002/07/owl#> .
+      @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+      :Person a owl:Class .
+      :name a owl:DatatypeProperty ; rdfs:domain :Person ; owl:maxCardinality 1 .
+    `;
+    const model = buildModelFromTriples(parseTurtle(legacy));
+    expect(model.properties[0]!.maxCardinality).toBe(1);
+    const out = serializeToTurtle({ ...model, id: 'c', createdAt: '', updatedAt: '' });
+    expect(out).toContain(':Person a owl:Class ;\n    rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :name ; owl:maxCardinality "1"^^xsd:nonNegativeInteger ] .');
+    expect(out).not.toMatch(/^:name a[^.]*owl:maxCardinality/m);
+    // …and comes back onto the property
+    expect(buildModelFromTriples(parseTurtle(out)).properties[0]!.maxCardinality).toBe(1);
   });
 });

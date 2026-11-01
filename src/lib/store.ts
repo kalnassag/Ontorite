@@ -7,11 +7,12 @@
  */
 
 import { create } from "zustand";
-import type { Ontology, OntologyClass, OntologyMetadata, OntologyProperty, Individual, IndividualPropertyValue, ClipboardItem, UnmappedTriple, ExtraTriple, ClassExpression } from "../types";
+import type { ParseResult, ParseError, Ontology, OntologyClass, OntologyMetadata, OntologyProperty, Individual, IndividualPropertyValue, ClipboardItem, UnmappedTriple, ExtraTriple, ClassExpression } from "../types";
 import { classExprReplace, classExprRemove } from "../types";
 import { loadAllOntologies, saveOntology, deleteOntology as dbDelete, debounce } from "./persistence";
 import { buildUri, toPascalCase, toCamelCase, STANDARD_PREFIXES } from "./uri-utils";
-import { parseTurtle, buildModelFromTriples } from "./turtle-parser";
+import { parseTurtle } from "./turtle-parser";
+import { buildModelFromTriples } from "./model-builder";
 import { serializeToTurtle } from "./turtle-serializer";
 import { detectFormat, parseToTriples, serializeFromOntology, type SerializationFormat } from "./formats";
 import {
@@ -59,6 +60,8 @@ interface EditorState {
   createOntology: (meta: Partial<OntologyMetadata>) => string;
   importOntology: (turtleText: string, fileName: string) => string;
   importOntologyAsync: (text: string, fileName: string) => Promise<string>;
+  /** Shared import tail: build the model, add it, and activate it. Throws on fatal parse errors. */
+  _addImported: (parsed: ParseResult, fileName: string) => string;
   importOntologyWithHandle: (
     turtleText: string,
     fileName: string,
@@ -125,6 +128,8 @@ interface EditorState {
 }
 
 const genId = () => crypto.randomUUID().slice(0, 8);
+
+const formatParseError = (err: ParseError) => (err.line ? `Line ${err.line}: ${err.message}` : err.message);
 
 function newOntology(meta: Partial<OntologyMetadata>): Ontology {
   const now = new Date().toISOString();
@@ -512,54 +517,24 @@ export const useStore = create<EditorState>((set, get) => {
     },
 
     importOntology: (turtleText, fileName) => {
-      const parsed = parseTurtle(turtleText);
-      const model = buildModelFromTriples(parsed);
-      const now = new Date().toISOString();
-      const fallbackLabel = fileName.replace(/\.ttl$/i, "");
-      const onto: Ontology = {
-        id: genId(),
-        metadata: {
-          ...model.metadata,
-          ontologyLabel: model.metadata.ontologyLabel || fallbackLabel,
-          prefixes: { ...STANDARD_PREFIXES, ...model.metadata.prefixes },
-        },
-        classes: model.classes,
-        properties: model.properties,
-        individuals: model.individuals,
-        unmappedTriples: model.unmappedTriples,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      // Build user-visible warnings from parse errors and data-loss events
-      const warnings: string[] = [];
-      for (const err of parsed.errors) {
-        warnings.push(err.line ? `Line ${err.line}: ${err.message}` : err.message);
-      }
-      if (parsed.blankNodeCount > 0) {
-        warnings.push(
-          `${parsed.blankNodeCount} blank-node statement${parsed.blankNodeCount > 1 ? "s" : ""} were skipped — blank nodes are not supported in v1.`
-        );
-      }
-
-      set((s) => ({
-        ontologies: [...s.ontologies, onto],
-        activeOntologyId: onto.id,
-        importWarnings: warnings,
-      }));
-      saveOntology(onto);
-      return onto.id;
+      return get()._addImported(parseTurtle(turtleText), fileName);
     },
 
     importOntologyAsync: async (text, fileName) => {
       const format = detectFormat(fileName, text);
-      if (format === "turtle") {
-        return get().importOntology(text, fileName);
+      const parsed = format === "turtle" ? parseTurtle(text) : await parseToTriples(text, format);
+      return get()._addImported(parsed, fileName);
+    },
+
+    _addImported: (parsed, fileName) => {
+      // Strict: a file with a syntax error is rejected rather than half-imported
+      // (a partial import linked to a file handle would be auto-saved over the original).
+      if (parsed.errors.length > 0 && parsed.triples.length === 0) {
+        throw new Error(parsed.errors.map(formatParseError).join("; "));
       }
-      const parsed = await parseToTriples(text, format);
       const model = buildModelFromTriples(parsed);
       const now = new Date().toISOString();
-      const fallbackLabel = fileName.replace(/\.(ttl|jsonld|json|rdf|xml|owl|nt)$/i, "");
+      const fallbackLabel = fileName.replace(/\.(ttl|turtle|n3|jsonld|json|rdf|xml|owl|nt)$/i, "");
       const onto: Ontology = {
         id: genId(),
         metadata: {
@@ -574,22 +549,10 @@ export const useStore = create<EditorState>((set, get) => {
         createdAt: now,
         updatedAt: now,
       };
-      sweepLegacyTriples(onto);
-
-      const warnings: string[] = [];
-      for (const err of parsed.errors) {
-        warnings.push(err.line ? `Line ${err.line}: ${err.message}` : err.message);
-      }
-      if (parsed.blankNodeCount > 0) {
-        warnings.push(
-          `${parsed.blankNodeCount} blank-node statement${parsed.blankNodeCount > 1 ? "s" : ""} were skipped — blank nodes are not supported in v1.`
-        );
-      }
-
       set((s) => ({
         ontologies: [...s.ontologies, onto],
         activeOntologyId: onto.id,
-        importWarnings: warnings,
+        importWarnings: parsed.errors.map(formatParseError),
       }));
       saveOntology(onto);
       return onto.id;

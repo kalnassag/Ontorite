@@ -150,7 +150,11 @@ export interface OntologyMetadata {
   baseUri: string; // Namespace URI (e.g., "http://example.org/ontology/")
   ontologyUri: string; // The owl:Ontology subject URI
   ontologyLabel: string;
+  /** Language tag of ontologyLabel ("" or undefined = untagged) */
+  ontologyLabelLang?: string;
   ontologyComment: string;
+  /** Language tag of ontologyComment ("" or undefined = untagged) */
+  ontologyCommentLang?: string;
   /** owl:versionIRI — full IRI identifying this specific version */
   versionIRI: string;
   /** owl:versionInfo — human-readable version string (e.g. "1.2.0") */
@@ -290,8 +294,6 @@ export interface ParseResult {
   baseUri: string;
   triples: ParsedTriple[];
   errors: ParseError[];
-  /** Number of blank-node subjects encountered and skipped (data loss warning) */
-  blankNodeCount: number;
 }
 
 export interface ParseError {
