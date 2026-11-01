@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { useStore } from "../../lib/store";
+import { useStore, selectCanUndo, selectCanRedo, flushPendingSaves } from "../../lib/store";
 import OntologyList from "./OntologyList";
 import ClassCard from "../core/ClassCard";
 import ClassForm from "../forms/ClassForm";
@@ -45,6 +45,11 @@ function useTheme() {
   return { dark, toggle: () => setDark((d) => !d) };
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+}
+
 type ViewMode = "classes" | "individuals" | "graph" | "tree" | "entity-graph" | "diff";
 
 export default function App() {
@@ -54,8 +59,8 @@ export default function App() {
   const activeOntology = useStore((s) => s.ontologies.find(o => o.id === s.activeOntologyId));
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
-  const canUndo = useStore((s) => s.canUndo);
-  const canRedo = useStore((s) => s.canRedo);
+  const canUndo = useStore(selectCanUndo);
+  const canRedo = useStore(selectCanRedo);
   const clipboard = useStore((s) => s.clipboard);
   const pasteClipboard = useStore((s) => s.pasteClipboard);
   const clearClipboard = useStore((s) => s.clearClipboard);
@@ -109,41 +114,48 @@ export default function App() {
     return () => clearTimeout(t);
   }, [importWarnings.length, clearImportWarnings]);
 
-  // Global keyboard shortcuts
+  // Global keyboard shortcuts. Undo/redo/new/paste are left to the browser
+  // while typing in a field, so native text undo keeps working.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const ctrl = e.ctrlKey || e.metaKey;
-      if (!ctrl) return;
-      if (e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        if (canUndo()) undo();
-      } else if ((e.key === "y") || (e.key === "z" && e.shiftKey)) {
-        e.preventDefault();
-        if (canRedo()) redo();
-      } else if (e.key === "n" && !e.shiftKey) {
-        // Only trigger new class if not in an input
-        if (document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
-          e.preventDefault();
-          setAddingClass(true);
-          setViewMode("classes");
-        }
-      } else if (e.key === "v") {
-        if (document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
-          if (clipboard) {
-            e.preventDefault();
-            pasteClipboard();
-            setViewMode("classes");
-          }
-        }
-      } else if (e.key === "s") {
-        // E6: Ctrl+S to save to file
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (key === "s") {
         e.preventDefault();
         saveToFile();
+        return;
+      }
+      if (isEditableTarget(e.target)) return;
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (key === "y" || (key === "z" && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      } else if (key === "n" && !e.shiftKey) {
+        e.preventDefault();
+        setAddingClass(true);
+        setViewMode("classes");
+      } else if (key === "v" && clipboard) {
+        e.preventDefault();
+        pasteClipboard();
+        setViewMode("classes");
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [undo, redo, canUndo, canRedo, clipboard, pasteClipboard, saveToFile]);
+  }, [undo, redo, clipboard, pasteClipboard, saveToFile]);
+
+  // Write any debounced saves before the tab is hidden or closed.
+  useEffect(() => {
+    const flush = () => { if (document.visibilityState === "hidden") void flushPendingSaves(); };
+    document.addEventListener("visibilitychange", flush);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", flush);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, []);
 
   const toggleExpandAll = useCallback(() => {
     setAllExpanded((prev) => {
@@ -424,7 +436,7 @@ export default function App() {
               <div className="flex items-center gap-0.5">
                 <button
                   onClick={undo}
-                  disabled={!canUndo()}
+                  disabled={!canUndo}
                   className="rounded px-1.5 py-1 text-2xs text-th-fg-3 hover:bg-th-hover hover:text-th-fg disabled:cursor-not-allowed disabled:opacity-30"
                   title="Undo (Ctrl+Z)"
                 >
@@ -432,7 +444,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={redo}
-                  disabled={!canRedo()}
+                  disabled={!canRedo}
                   className="rounded px-1.5 py-1 text-2xs text-th-fg-3 hover:bg-th-hover hover:text-th-fg disabled:cursor-not-allowed disabled:opacity-30"
                   title="Redo (Ctrl+Y)"
                 >
