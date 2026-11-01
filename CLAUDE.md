@@ -17,11 +17,18 @@ teaching tool or a toy. Assume the user understands OWL 2, RDF, RDFS, SKOS, and 
 - **Build:** Vite
 - **Styling:** Tailwind CSS 3
 - **State:** Zustand (lightweight, no boilerplate)
-- **Persistence:** IndexedDB via `idb` (for multi-ontology storage across sessions)
-- **Turtle parsing:** Custom parser in `src/lib/turtle-parser.ts`
+- **Persistence:** IndexedDB via `idb` (for multi-ontology storage across sessions),
+  plus write-back to the original file via the File System Access API (Chrome/Edge)
+- **RDF parsing:** N3.js (Turtle, N-Triples), `jsonld`, `rdfxml-streaming-parser` —
+  all normalised to `ParsedTriple[]`, then mapped by `src/lib/model-builder.ts`
 - **Turtle serialization:** Custom serializer in `src/lib/turtle-serializer.ts`
+  (the readable output is a feature). Other export formats go Turtle → N3 → target.
+- **Graphs:** `d3-force` (layout only; rendering is React SVG)
+- **Animation:** framer-motion (cards, drawers)
 - **Icons:** Lucide React
-- **No backend.** This is a fully client-side application.
+- **Tests:** Vitest (`npm test`), including an RDF-isomorphism round-trip suite
+- **No backend.** Fully client-side. `server/index.js` (Express) only serves the built
+  `dist/` for the Docker image — it has no API and must stay that way.
 
 ## Domain Model
 
@@ -30,14 +37,18 @@ teaching tool or a toy. Assume the user understands OWL 2, RDF, RDFS, SKOS, and 
 **Ontology** — a named, versioned container. Has:
 - Base URI (namespace)
 - Prefix map (prefix → URI)
-- owl:Ontology metadata (label, comment, versionIRI)
-- A set of Classes and Properties
+- owl:Ontology metadata (label, comment, versionIRI, versionInfo, editorial notes)
+- Classes, Properties, Individuals, and `unmappedTriples` (preserved raw triples)
+
+All entities carry `editorialNotes` (`skos:editorialNote`), `created` / `modified`
+(`dcterms:`), and `extraTriples` for anything without a typed field.
 
 **Class** (`owl:Class`) — Has:
 - URI (derived from base URI + local name)
 - Labels (`rdfs:label`) — multilingual, each with value + language tag
 - Descriptions (`rdfs:comment`) — multilingual, same structure
 - `rdfs:subClassOf` — zero or more parent classes (from within the same ontology)
+- `owl:disjointWith`, and simple `restrictions` (see decision 4)
 - **Visually displays all properties where this class is the `rdfs:domain`**
 
 **Property** — one of three OWL types:
@@ -50,9 +61,13 @@ Each property has:
 - Property type (one of the three above)
 - Labels (`rdfs:label`) — multilingual
 - Descriptions (`rdfs:comment`) — multilingual
-- `rdfs:domain` — exactly one class (the class it "belongs to" visually)
-- `rdfs:range` — a class URI, XSD type, or empty depending on property type
+- `rdfs:domain` — a `ClassExpression`: one class, or an `owl:unionOf` of classes (the
+  property is shown nested under each member)
+- `rdfs:range` — zero or more `ClassExpression`s (class URI, XSD type, or union)
 - `rdfs:subPropertyOf` — zero or more parent properties
+- `owl:inverseOf` (object properties) and simplified min/max/exact cardinality
+
+**Individual** — an IRI typed with one or more classes, with property assertions.
 
 ### Key Design Decisions
 
@@ -67,41 +82,65 @@ Each property has:
    for properties, PascalCase for classes) but are always editable. The full URI is
    `{baseURI}{localName}`.
 
-4. **No blank nodes in the model.** Keep it clean. Restrictions and complex class
-   expressions are out of scope for v1.
+4. **Blank nodes only for shapes the model owns.** The model has no blank-node
+   entities. Two blank-node shapes are mapped into typed fields:
+   - `[ a owl:Class ; owl:unionOf ( … ) ]` as a property domain/range → `ClassExpression`
+   - `[ a owl:Restriction ; owl:onProperty … ; <one value> ]` as the object of a
+     class's `rdfs:subClassOf` → `OntologyClass.restrictions` (some/all/hasValue,
+     min/max/exact cardinality)
+   They are consumed only when the shape *and* references match exactly. Everything
+   else (intersections, qualified cardinalities, property chains, oneOf, …) is kept
+   verbatim as raw triples and re-serialized inline.
+
+5. **Property cardinality is OWL restrictions on the wire.** `min/max/exactCardinality`
+   on a property serialize as a restriction on each domain class (`owl:Thing` if
+   unassigned), and a cardinality restriction on a property's own single domain class
+   is hoisted back onto the property on import. Never write `owl:cardinality` directly
+   on a property — that's not OWL 2 DL.
 
 ## Architecture
 
 ```
 src/
   components/
-    App.tsx                 — Root layout, sidebar + main panel
-    OntologyList.tsx        — Sidebar: list of saved ontologies, create/import
-    OntologyMeta.tsx        — Edit ontology metadata (URI, prefixes, label)
-    ClassCard.tsx           — Expandable card for a single class
-    PropertyRow.tsx         — Single property nested inside a ClassCard
-    PropertyForm.tsx        — Modal/inline form for creating/editing a property
-    ClassForm.tsx           — Modal/inline form for creating/editing a class
-    LabelEditor.tsx         — Reusable widget for multilingual label/description editing
-    PrefixEditor.tsx        — Table for editing prefix mappings
-    UnassignedProperties.tsx — Bucket for domain-less properties
-    ImportExport.tsx        — TTL import/export controls
-    Toast.tsx               — Notification component
-    OntologyGraph.tsx       — D3 force graph for the entire ontology
-    EntityGraph.tsx         — D3 force graph centered on a specific entity
-    IndividualCard.tsx      — Expandable card for an individual instance
+    layout/   App (root layout + shortcuts), OntologyList (sidebar), ClassBrowserPanel,
+              Drawer, Toast, KeyboardHelp, ErrorBoundary
+    core/     ClassCard, PropertyRow, IndividualCard, UnassignedProperties,
+              UnmappedTriplesTable (preserved triples), ClassHierarchyTree,
+              ValidationPanel, OntologyDiff, ImportExport, TimestampFooter
+    forms/    ClassForm, PropertyForm, LabelEditor, ExtraTripleEditor, VocabAutocomplete
+    dialogs/  OntologyMetadataDrawer, EditorialNotesDrawer, CreateEntityDialog, CreateEdgeDialog
+    graph/    OntologyGraph (force), TreeGraph (hierarchy), EntityGraph (neighbourhood)
   lib/
-    turtle-parser.ts        — Turtle → triples → internal model
-    turtle-serializer.ts    — Internal model → valid Turtle
-    store.ts                — Zustand store: ontology state + actions
-    persistence.ts          — IndexedDB read/write via idb
-    uri-utils.ts            — URI compaction, expansion, local name extraction
-    validation.ts           — Model validation (duplicate URIs, missing domains, etc.)
-  types/
-    index.ts                — TypeScript interfaces for the domain model
-  main.tsx                  — Vite entry point
-  index.css                 — Tailwind imports + custom styles
+    turtle-parser.ts      Turtle/N-Triples → ParsedTriple[] (N3.js adapter, strict)
+    model-builder.ts      ParsedTriple[] → domain model (see decision 4)
+    turtle-serializer.ts  domain model → Turtle
+    formats/              JSON-LD / RDF/XML / N-Triples adapters (lazy-loaded)
+    store.ts              Zustand store, composed from store/*-slice.ts
+    store/                internals.ts (commit: undo + persistence), migrations.ts, slices
+    selectors.ts          pure derivations (domainUris, propertiesByDomain, …)
+    vocab.ts              RDF/OWL/RDFS/SKOS/DCTERMS IRIs — don't redeclare them
+    persistence.ts        IndexedDB via idb
+    file-access.ts        File System Access API handles
+    uri-utils.ts          compact (always valid Turtle), expand, local names
+    validation.ts         model validation
+  types/index.ts          domain model interfaces
 ```
+
+### Store rules
+
+- Every domain mutation goes through `commit(updater)` in `store/internals.ts`. It
+  records an undo snapshot for **that ontology** (history is per ontology), clears its
+  redo stack, and schedules saves **by ontology ID**. Don't hand-roll `set()` for edits.
+- Components select narrowly (`selectActiveOntology`, a single entity, a memoised
+  derivation). Never call a function inside a selector that returns a new array/map.
+
+## Testing
+
+- `npm test` runs Vitest; `npm run lint` and `npx tsc -b` must be clean.
+- `src/lib/__tests__/roundtrip.test.ts` requires every fixture, `docs/*.ttl` file and
+  library ontology to be **graph-isomorphic** (RDFC-1.0) after import → export, and the
+  export to be stable. Add a fixture whenever you touch parsing or serialization.
 
 ## Feature Requirements (Priority Order)
 
@@ -177,29 +216,21 @@ src/
 15. **Keyboard shortcuts**
     - `Ctrl+N` new class, `Ctrl+Shift+N` new property, `Ctrl+S` export, `Ctrl+Z` undo
 
-## Turtle Parser Requirements
+## Import Requirements
 
-The parser in `src/lib/turtle-parser.ts` must handle:
+Parsing is delegated to N3.js — don't reintroduce a hand-rolled tokenizer. It is strict:
+a syntax error rejects the file with its line number (a half-parsed file linked to a file
+handle would otherwise be auto-saved over the original). Blank nodes are relabelled
+`_:b0…` per document.
 
-- `@prefix` and `PREFIX` (SPARQL-style) declarations
-- `@base` and `BASE` declarations
-- The `a` shorthand for `rdf:type`
-- Prefixed names (`ex:Thing`, `:localName`)
-- Full URIs (`<http://example.org/Thing>`)
-- String literals with language tags (`"label"@en`)
-- String literals with datatype (`"42"^^xsd:integer`)
-- Triple-quoted strings (`"""..."""`)
-- Predicate-object list shorthand (`;`)
-- Object list shorthand (`,`)
-- Comments (`# ...`)
-- Blank lines and arbitrary whitespace
-
-It does NOT need to handle (v1):
-- Blank node syntax (`[ ]` or `_:`)
-- Collections (`( )`)
-- Numeric/boolean shorthand literals (`42`, `true`)
-
-Return structured triples with proper literal metadata (value, language, datatype).
+The model builder (`model-builder.ts`) must:
+- classify subjects by **all** their `rdf:type`s (a property may be declared
+  `a owl:TransitiveProperty, owl:ObjectProperty` in either order); types beyond the
+  one the serializer emits go to `extraTriples`
+- never promote external vocabulary terms (`skos:Concept`, `owl:Restriction`, …) to
+  local classes — only undeclared terms in the ontology's own namespace
+- keep any triple it can't represent exactly (second `rdfs:domain`, typed labels,
+  extra ontology labels, …) in `extraTriples` / `unmappedTriples`
 
 ## Turtle Serializer Requirements
 
@@ -207,12 +238,14 @@ The serializer in `src/lib/turtle-serializer.ts` must produce:
 
 - Properly formatted `@prefix` declarations
 - `owl:Ontology` declaration block
-- Classes grouped under a `# Classes` comment header
-- Properties grouped under `# Object Properties`, `# Datatype Properties`,
-  `# Annotation Properties` comment headers
-- Predicate-object list shorthand (`;`) within each resource block
-- Language-tagged and datatype literals where appropriate
-- Compact URIs using the prefix map wherever possible
+- Sections: Classes, Object / Datatype / Annotation Properties, Property cardinalities
+  (for properties with no local domain class), Individuals, Preserved triples
+- Predicate-object lists (`;`), objects of the same predicate grouped with `,`
+- Language-tagged and datatype literals; `1`, `2.5`, `true` shorthand where lossless
+- Prefixed names only when the local part is a valid `PN_LOCAL` (`compact()` handles
+  this — otherwise `<IRI>`)
+- Blank nodes referenced once written inline (`[ … ]`, `( … )`); others labelled and
+  numbered in output order so exports are stable
 - Clean, human-readable indentation (4-space indent for continuation lines)
 
 ## UI/UX Principles
@@ -244,10 +277,23 @@ The serializer in `src/lib/turtle-serializer.ts` must produce:
    A class can have `"Dog"@en` and `"Hund"@de` simultaneously.
 2. **Don't confuse URI with local name.** The URI is `{baseURI}{localName}`.
    Display the local name in the UI; use the full URI in serialization.
-3. **Don't lose unrecognised triples on round-trip.** If the parser encounters
-   triples it doesn't map to the model (e.g., `owl:disjointWith`), store them
-   in a `unmappedTriples` array and re-serialize them verbatim on export.
+3. **Don't lose unrecognised triples on round-trip.** Triples the model can't
+   represent exactly go to the subject entity's `extraTriples`, or to
+   `unmappedTriples` when the subject isn't an entity, and are re-serialized verbatim.
+   The round-trip test suite enforces this.
 4. **Don't auto-assign language tags.** PoolParty's blanket `@en` tagging is
    a known antipattern. Only tag with a language when the user explicitly sets one.
 5. **Prefix collisions.** When importing, merge prefixes with existing ones.
    Flag conflicts (same prefix, different URI) to the user.
+
+## Known Tech Debt
+
+- Files over the 300-line guideline: `OntologyGraph.tsx`, `EntityGraph.tsx`,
+  `App.tsx`, `PropertyForm.tsx`, `TreeGraph.tsx` (and the `common-ontologies.ts` data
+  file, which is fine). The three graph views duplicate pan/zoom/hover logic and
+  should share a core.
+- The empty domain is the sentinel `{ kind: "class", uri: "" }`; use `domainUris()` /
+  `hasDomain()` from `selectors.ts` rather than inspecting it directly.
+- New labels are tagged with the ontology's `defaultLanguage` (shown and editable in
+  the label editor). Revisit if this conflicts with pitfall 4.
+

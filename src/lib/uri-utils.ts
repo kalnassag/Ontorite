@@ -35,6 +35,7 @@ const PN_LOCAL_RE = /^([A-Za-z0-9_\u00C0-\uFFFF]([A-Za-z0-9_\-.\u00B7\u00C0-\uFF
 
 /** Wrap a URI as a Turtle IRIREF, escaping characters IRIREF forbids. */
 export function iriRef(uri: string): string {
+  // eslint-disable-next-line no-control-regex -- IRIREF forbids control characters; we escape them
   const escaped = uri.replace(/[\u0000-\u0020<>"{}|^`\\]/g, (ch) =>
     "\\u" + ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0"));
   return `<${escaped}>`;

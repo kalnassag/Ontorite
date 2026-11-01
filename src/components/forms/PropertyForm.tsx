@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { useStore } from "../../lib/store";
+import { domainUris as domainUrisOf } from "../../lib/selectors";
 import { toCamelCase, XSD_TYPES, compact, expand, buildUri } from "../../lib/uri-utils";
 import LabelEditor from "./LabelEditor";
 import ExtraTripleEditor from "./ExtraTripleEditor";
@@ -48,8 +49,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
   // Domain — internally a list of URIs. 1 entry = single class; 2+ = union.
   const initialDomainUris: string[] = (() => {
     if (existing) {
-      if (existing.domain.kind === "class") return existing.domain.uri ? [existing.domain.uri] : [];
-      return [...existing.domain.uris];
+      return domainUrisOf(existing);
     }
     return defaultDomainUri ? [defaultDomainUri] : [];
   })();

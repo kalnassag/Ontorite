@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { useStore, selectCanUndo, selectCanRedo, flushPendingSaves } from "../../lib/store";
+import { useStore, selectActiveOntology, selectCanUndo, selectCanRedo, flushPendingSaves } from "../../lib/store";
 import OntologyList from "./OntologyList";
 import ClassCard from "../core/ClassCard";
 import ClassForm from "../forms/ClassForm";
@@ -21,6 +21,7 @@ import OntologyDiff from "../core/OntologyDiff";
 import Toast from "./Toast";
 import KeyboardHelp from "./KeyboardHelp";
 import { validate } from "../../lib/validation";
+import { propertiesByDomain as propertiesByDomainOf, unassignedProperties } from "../../lib/selectors";
 import type { OntologyProperty } from "../../types";
 import {
   Plus, Sun, Moon, Network, ChevronsDown, ChevronsUp, Layers, Users,
@@ -55,8 +56,7 @@ type ViewMode = "classes" | "individuals" | "graph" | "tree" | "entity-graph" | 
 export default function App() {
   const init = useStore((s) => s.init);
   const initialized = useStore((s) => s.initialized);
-  // E2: Use stable inline selector instead of getActiveOntology()
-  const activeOntology = useStore((s) => s.ontologies.find(o => o.id === s.activeOntologyId));
+  const activeOntology = useStore(selectActiveOntology);
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
   const canUndo = useStore(selectCanUndo);
@@ -170,26 +170,10 @@ export default function App() {
     setToast({ message, action });
   }, []);
 
-  // E1: Memoize properties-by-domain map at App level
-  const propertiesByDomain = useMemo(() => {
-    const map = new Map<string, OntologyProperty[]>();
-    if (!activeOntology) return map;
-    for (const cls of activeOntology.classes) map.set(cls.id, []);
-    for (const prop of activeOntology.properties) {
-      const uris = prop.domain.kind === "class"
-        ? (prop.domain.uri ? [prop.domain.uri] : [])
-        : prop.domain.uris;
-      for (const u of uris) {
-        const cls = activeOntology.classes.find((c) => c.uri === u);
-        if (cls) {
-          const list = map.get(cls.id) ?? [];
-          list.push(prop);
-          map.set(cls.id, list);
-        }
-      }
-    }
-    return map;
-  }, [activeOntology?.properties, activeOntology?.classes]); // eslint-disable-line react-hooks/exhaustive-deps
+  const propertiesByDomain = useMemo(
+    () => (activeOntology ? propertiesByDomainOf(activeOntology) : new Map<string, OntologyProperty[]>()),
+    [activeOntology],
+  );
 
   // U4: Auto-running validation
   const validationIssues = useMemo(
@@ -197,18 +181,10 @@ export default function App() {
     [activeOntology]
   );
 
-  // U8: Unassigned property count
-  const unassignedCount = useMemo(() => {
-    if (!activeOntology) return 0;
-    const classUris = new Set(activeOntology.classes.map((c) => c.uri));
-    return activeOntology.properties.filter((p) => {
-      const uris = p.domain.kind === "class"
-        ? (p.domain.uri ? [p.domain.uri] : [])
-        : p.domain.uris;
-      if (uris.length === 0) return true;
-      return !uris.some((u) => classUris.has(u));
-    }).length;
-  }, [activeOntology]);
+  const unassignedCount = useMemo(
+    () => (activeOntology ? unassignedProperties(activeOntology).length : 0),
+    [activeOntology],
+  );
 
   if (!initialized) {
     return (

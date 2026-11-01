@@ -8,6 +8,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, ChevronRight, Pencil, Check, X, Trash2, Plus, StickyNote } from "lucide-react";
 import { useStore } from "../../lib/store";
+import { domainUris } from "../../lib/selectors";
 import { compact, buildUri, toCamelCase } from "../../lib/uri-utils";
 import EditorialNotesDrawer from "../dialogs/EditorialNotesDrawer";
 import TimestampFooter from "./TimestampFooter";
@@ -77,10 +78,7 @@ export default function IndividualCard({ individual, defaultExpanded = false }: 
 
   const schemaProps = new Map<string, OntologyProperty[]>();
   for (const typeUri of individual.typeUris) {
-    const propsForType = allProperties.filter((p) => {
-      if (p.domain.kind === "class") return p.domain.uri === typeUri;
-      return p.domain.uris.includes(typeUri);
-    });
+    const propsForType = allProperties.filter((p) => domainUris(p).includes(typeUri));
     if (propsForType.length > 0) schemaProps.set(typeUri, propsForType);
   }
 

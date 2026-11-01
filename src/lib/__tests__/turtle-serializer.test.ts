@@ -3,6 +3,7 @@ import { parseTurtle } from '../turtle-parser';
 import { buildModelFromTriples } from '../model-builder';
 import { serializeToTurtle } from '../turtle-serializer';
 import * as fs from 'fs';
+import type { Ontology } from '../../types';
 
 const RDF_FIRST = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
 
@@ -14,7 +15,7 @@ describe('Turtle Serializer', () => {
     // Parse
     const parsed = parseTurtle(turtle);
     const model = buildModelFromTriples(parsed);
-    const ontology = model as any; // Cast for testing
+    const ontology: Ontology = { ...model, id: 'test', createdAt: '', updatedAt: '' };
 
     // Serialize
     const serializedTurtle = serializeToTurtle(ontology);
@@ -77,7 +78,7 @@ describe('Editorial notes + version round-trip', () => {
   it('round-trips without duplicating editorialNote / version triples', () => {
     const parsed1 = parseTurtle(turtle);
     const model1 = buildModelFromTriples(parsed1);
-    const ontology1 = { ...model1, id: 'test', createdAt: '', updatedAt: '' } as any;
+    const ontology1 = { ...model1, id: 'test', createdAt: '', updatedAt: '' } satisfies Ontology;
     const serialized = serializeToTurtle(ontology1);
 
     // Each editorialNote line should appear exactly once per source occurrence
@@ -140,7 +141,7 @@ describe('dcterms:created/modified round-trip', () => {
   it('round-trips without duplicating dcterms triples', () => {
     const parsed1 = parseTurtle(turtle);
     const model1 = buildModelFromTriples(parsed1);
-    const ontology1 = { ...model1, id: 'test', createdAt: '', updatedAt: '' } as any;
+    const ontology1 = { ...model1, id: 'test', createdAt: '', updatedAt: '' } satisfies Ontology;
     const serialized = serializeToTurtle(ontology1);
 
     expect(serialized.match(/dcterms:created/g)).toHaveLength(3);  // ontology + class + property
@@ -209,7 +210,7 @@ describe('owl:unionOf collection round-trip', () => {
       id: 'test',
       createdAt: '',
       updatedAt: '',
-    } as any;
+    } satisfies Ontology;
 
     const serialized = serializeToTurtle(ontology1);
 
@@ -231,7 +232,7 @@ describe('owl:unionOf collection round-trip', () => {
 
     // A second round-trip must be stable (no further data loss)
     const model2 = buildModelFromTriples(parsed2);
-    const ontology2 = { ...model2, id: 'test2', createdAt: '', updatedAt: '' } as any;
+    const ontology2 = { ...model2, id: 'test2', createdAt: '', updatedAt: '' } satisfies Ontology;
     const serialized2 = serializeToTurtle(ontology2);
     expect(serialized2).not.toMatch(/<_:/);
     expect(serialized2).toMatch(/owl:unionOf\s+\(/);
@@ -259,7 +260,7 @@ describe('owl:unionOf collection round-trip', () => {
     expect(parsed.errors).toHaveLength(0);
 
     const model = buildModelFromTriples(parsed);
-    const ontology = { ...model, id: 'multi', createdAt: '', updatedAt: '' } as any;
+    const ontology = { ...model, id: 'multi', createdAt: '', updatedAt: '' } satisfies Ontology;
     const serialized = serializeToTurtle(ontology);
 
     expect(serialized).not.toMatch(/<_:/);

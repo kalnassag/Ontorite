@@ -43,18 +43,6 @@ export type ClassExpression =
   | { kind: "class"; uri: string }
   | { kind: "union"; uris: string[] };
 
-/** All class URIs referenced by a ClassExpression. */
-export function classExprUris(expr: ClassExpression): string[] {
-  if (expr.kind === "class") return [expr.uri];
-  return expr.uris;
-}
-
-/** True if the expression references the given class URI (single or union member). */
-export function classExprIncludes(expr: ClassExpression, uri: string): boolean {
-  if (expr.kind === "class") return expr.uri === uri;
-  return expr.uris.includes(uri);
-}
-
 /** Map a class URI through a ClassExpression (used for URI-rename cascade). */
 export function classExprReplace(expr: ClassExpression, oldUri: string, newUri: string): ClassExpression {
   if (expr.kind === "class") {
@@ -225,46 +213,6 @@ export interface ValidationIssue {
   entityType: "class" | "property" | "ontology";
   message: string;
   field?: string;
-}
-
-/** What the store exposes */
-export interface OntologyStore {
-  // Data
-  ontologies: Ontology[];
-  activeOntologyId: string | null;
-
-  // Computed (derived in selectors, not stored)
-  // activeOntology, classesSorted, propertiesByDomain, unassignedProperties, validationIssues
-
-  // Actions — ontology lifecycle
-  createOntology: (meta: Partial<OntologyMetadata>) => string; // returns new ID
-  importOntology: (turtleText: string, fileName: string) => string; // returns new ID
-  deleteOntology: (id: string) => void;
-  setActiveOntology: (id: string) => void;
-  updateMetadata: (patch: Partial<OntologyMetadata>) => void;
-
-  // Actions — classes
-  addClass: (cls: Partial<OntologyClass>) => string;
-  updateClass: (id: string, patch: Partial<OntologyClass>) => void;
-  deleteClass: (id: string) => void;
-
-  // Actions — properties
-  addProperty: (prop: Partial<OntologyProperty>) => string;
-  updateProperty: (id: string, patch: Partial<OntologyProperty>) => void;
-  deleteProperty: (id: string) => void;
-
-  // Actions — individuals
-  addIndividual: (label: string, typeUri: string) => string;
-  deleteIndividual: (id: string) => void;
-
-  // Actions — export
-  exportTurtle: () => string;
-
-  // Actions — history
-  undo: () => void;
-  redo: () => void;
-  canUndo: boolean;
-  canRedo: boolean;
 }
 
 // ── Clipboard Types ────────────────────────────────────────────────────

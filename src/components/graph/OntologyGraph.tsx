@@ -17,6 +17,7 @@ import {
 } from "d3-force";
 import { X, ZoomIn, ZoomOut, Maximize2, RefreshCw, Plus, Pencil, Trash2, CirclePlus } from "lucide-react";
 import { useStore } from "../../lib/store";
+import { domainUris } from "../../lib/selectors";
 import { compact } from "../../lib/uri-utils";
 import { classExprFormat } from "../../types";
 import ClassForm from "../forms/ClassForm";
@@ -185,8 +186,7 @@ export default function OntologyGraph({ onClose }: Props) {
 
     // -- Nodes --
     // Helpers: ClassExpression → list of URIs
-    const domainUrisOf = (p: typeof properties[number]): string[] =>
-      p.domain.kind === "class" ? (p.domain.uri ? [p.domain.uri] : []) : p.domain.uris;
+    const domainUrisOf = domainUris;
     const rangeUrisOf = (r: typeof properties[number]["ranges"][number]): string[] =>
       r.kind === "class" ? [r.uri] : r.uris;
 
@@ -383,7 +383,7 @@ export default function OntologyGraph({ onClose }: Props) {
         .id((d) => d.id)
         .distance((l) => {
           // Drastically increased base distances to prevent edge labels overlapping
-          let dist = l.type === "subClassOf" ? 220 : l.type === "datatypeProperty" ? 300 : 350;
+          const dist = l.type === "subClassOf" ? 220 : l.type === "datatypeProperty" ? 300 : 350;
           return dist + (N > 30 ? 80 : 0); // extra distance for big graphs
         })
         .strength((l)  => l.type === "subClassOf" ? 0.8 : 0.35))
@@ -954,8 +954,7 @@ export default function OntologyGraph({ onClose }: Props) {
         if (node.kind === "class") {
           const cls = classes.find((c) => c.id === node.id);
           const prefixes = activeOntology?.metadata.prefixes ?? {};
-          const domainIncludes = (p: typeof properties[number]) =>
-            p.domain.kind === "class" ? p.domain.uri === node.uri : p.domain.uris.includes(node.uri);
+          const domainIncludes = (p: typeof properties[number]) => domainUris(p).includes(node.uri);
           const ownDatatype = properties.filter((p) => p.type === "owl:DatatypeProperty" && domainIncludes(p));
           const ownAnnotation = properties.filter((p) => p.type === "owl:AnnotationProperty" && domainIncludes(p));
           return (

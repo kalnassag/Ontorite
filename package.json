@@ -14,8 +14,6 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@monaco-editor/react": "^4.7.0",
-    "@types/d3-force": "^3.0.10",
     "d3-force": "^3.0.0",
     "express": "^4.22.1",
     "framer-motion": "^12.38.0",
@@ -31,6 +29,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@types/d3-force": "^3.0.10",
     "@types/jsonld": "^1.5.15",
     "@types/n3": "^1.26.1",
     "@types/node": "^25.6.0",

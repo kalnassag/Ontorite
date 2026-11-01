@@ -11,6 +11,7 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { X, ZoomIn, ZoomOut, Maximize2, RefreshCw } from "lucide-react";
 import { useStore } from "../../lib/store";
+import { domainUris } from "../../lib/selectors";
 import { compact } from "../../lib/uri-utils";
 import { classExprFormat } from "../../types";
 import type { OntologyClass, OntologyProperty } from "../../types";
@@ -200,8 +201,7 @@ export default function TreeGraph({ onClose }: Props) {
       {hoveredId && (() => {
         const cls = classes.find((c) => c.id === hoveredId);
         if (!cls) return null;
-        const domainIncludes = (p: typeof properties[number]) =>
-          p.domain.kind === "class" ? p.domain.uri === cls.uri : p.domain.uris.includes(cls.uri);
+        const domainIncludes = (p: typeof properties[number]) => domainUris(p).includes(cls.uri);
         const ownDatatype = properties.filter((p) => p.type === "owl:DatatypeProperty" && domainIncludes(p));
         const ownAnnotation = properties.filter((p) => p.type === "owl:AnnotationProperty" && domainIncludes(p));
         return (
