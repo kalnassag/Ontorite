@@ -245,3 +245,18 @@ describe('moveHeaderTriples + closure ownership on load', () => {
     expect(owner.blankNodeTriples).toHaveLength(1);
   });
 });
+
+describe('repairReferences', () => {
+  it('turns bare class names typed into pickers by older versions into IRIs', async () => {
+    const { migrateOntology } = await import('../store/migrations');
+    const onto = makeOntology();
+    onto.properties[0]!.ranges = [{ kind: 'class', uri: 'Dog' }, { kind: 'class', uri: 'Vehicle' }];
+    onto.classes[0]!.subClassOf = ['Animal'];
+    migrateOntology(onto);
+    expect(onto.properties[0]!.ranges).toEqual([
+      { kind: 'class', uri: 'http://example.org/Dog' },
+      { kind: 'class', uri: 'http://example.org/Vehicle' },
+    ]);
+    expect(onto.classes[0]!.subClassOf).toEqual(['http://example.org/Animal']);
+  });
+});

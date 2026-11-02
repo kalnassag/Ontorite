@@ -3,7 +3,7 @@
  * Every action goes through `commit`, which handles undo + persistence.
  */
 
-import type { ClassExpression, Individual, OntologyClass, OntologyProperty, PropertyType, UnmappedTriple } from "../../types";
+import type { ClassExpression, Individual, Ontology, OntologyClass, OntologyProperty, PropertyType, UnmappedTriple } from "../../types";
 import { classExprReplace, classExprRemove } from "../../types";
 import { buildUri, toPascalCase, toCamelCase } from "../uri-utils";
 import { genId, nowIso } from "./ids";
@@ -11,8 +11,9 @@ import { addRawTriples, renameIriInRawTriples } from "../raw-triples";
 import { buildModelFromTriples } from "../model-builder";
 import { OWL, RDF, isBlankNode } from "../vocab";
 
+import type { EditOptions, Slice } from "./types";
+
 const expandOwl = (type: PropertyType) => OWL[type.slice(4) as "ObjectProperty" | "DatatypeProperty" | "AnnotationProperty"];
-import type { Slice } from "./types";
 
 type EntityKeys =
   | "addClass" | "updateClass" | "deleteClass"
@@ -24,6 +25,42 @@ type EntityKeys =
 const renameIn = (uris: string[], oldUri: string, newUri: string) => uris.map((u) => (u === oldUri ? newUri : u));
 const EMPTY_DOMAIN: ClassExpression = { kind: "class", uri: "" };
 
+/** A complete class from a partial one, with defaults from the ontology. */
+function buildClass(onto: Ontology, partial: Partial<OntologyClass>): OntologyClass {
+  const lang = onto.metadata.defaultLanguage;
+  const label = partial.labels?.[0]?.value || "NewClass";
+  const localName = partial.localName || toPascalCase(label);
+  const now = nowIso();
+  return {
+    id: genId(),
+    localName,
+    uri: partial.uri || buildUri(onto.metadata.baseUri, localName),
+    labels: partial.labels || [{ value: label, lang }],
+    descriptions: partial.descriptions || [{ value: "", lang }],
+    editorialNotes: partial.editorialNotes || [],
+    created: partial.created ?? now,
+    modified: partial.modified ?? now,
+    subClassOf: partial.subClassOf || [],
+    disjointWith: partial.disjointWith || [],
+    restrictions: partial.restrictions || [],
+    extraTriples: partial.extraTriples || [],
+  };
+}
+
+/** Add the classes a form named but that don't exist yet (skipping any whose URI now exists). */
+function withNewClasses(onto: Ontology, opts: EditOptions | undefined): Ontology {
+  const taken = new Set(onto.classes.map((c) => c.uri));
+  const created = (opts?.newClasses ?? [])
+    .filter((spec) => !taken.has(spec.uri) && taken.add(spec.uri))
+    .map((spec) => buildClass(onto, {
+      uri: spec.uri,
+      localName: spec.localName,
+      labels: [{ value: spec.label, lang: onto.metadata.defaultLanguage }],
+      descriptions: [],
+    }));
+  return created.length > 0 ? { ...onto, classes: [...onto.classes, ...created] } : onto;
+}
+
 export const entitySlice: Slice<EntityKeys> = (_set, get, { commit }) => {
   /** Map one individual of the active ontology. */
   const mapIndividual = (id: string, fn: (ind: Individual) => Individual) =>
@@ -31,35 +68,18 @@ export const entitySlice: Slice<EntityKeys> = (_set, get, { commit }) => {
 
   return {
     // ── Classes ──────────────────────────────────────────────────────────
-    addClass: (partial) => {
-      const id = genId();
+    addClass: (partial, opts) => {
       const onto = get().getActiveOntology();
-      if (!onto) return id;
-      const lang = onto.metadata.defaultLanguage;
-      const label = partial.labels?.[0]?.value || "NewClass";
-      const localName = partial.localName || toPascalCase(label);
-      const now = nowIso();
-      const cls: OntologyClass = {
-        id,
-        localName,
-        uri: partial.uri || buildUri(onto.metadata.baseUri, localName),
-        labels: partial.labels || [{ value: label, lang }],
-        descriptions: partial.descriptions || [{ value: "", lang }],
-        editorialNotes: partial.editorialNotes || [],
-        created: partial.created ?? now,
-        modified: partial.modified ?? now,
-        subClassOf: partial.subClassOf || [],
-        disjointWith: partial.disjointWith || [],
-        restrictions: partial.restrictions || [],
-        extraTriples: partial.extraTriples || [],
-      };
-      commit((o) => ({ ...o, classes: [...o.classes, cls] }));
-      return id;
+      if (!onto) return genId();
+      const cls = buildClass(onto, partial);
+      commit((o) => withNewClasses({ ...o, classes: [...o.classes, cls] }, opts));
+      return cls.id;
     },
 
-    updateClass: (id, patch) => {
+    updateClass: (id, patch, opts) => {
       const stamp = nowIso();
-      commit((o) => {
+      commit((prev) => {
+        const o = withNewClasses(prev, opts);
         const oldUri = o.classes.find((c) => c.id === id)?.uri;
         const newUri = patch.uri ?? oldUri;
         const renamed = !!oldUri && !!newUri && oldUri !== newUri;
@@ -103,7 +123,7 @@ export const entitySlice: Slice<EntityKeys> = (_set, get, { commit }) => {
     },
 
     // ── Properties ───────────────────────────────────────────────────────
-    addProperty: (partial) => {
+    addProperty: (partial, opts) => {
       const id = genId();
       const onto = get().getActiveOntology();
       if (!onto) return id;
@@ -130,13 +150,14 @@ export const entitySlice: Slice<EntityKeys> = (_set, get, { commit }) => {
         exactCardinality: partial.exactCardinality,
         extraTriples: partial.extraTriples || [],
       };
-      commit((o) => ({ ...o, properties: [...o.properties, prop] }));
+      commit((o) => withNewClasses({ ...o, properties: [...o.properties, prop] }, opts));
       return id;
     },
 
-    updateProperty: (id, patch) => {
+    updateProperty: (id, patch, opts) => {
       const stamp = nowIso();
-      commit((o) => {
+      commit((prev) => {
+        const o = withNewClasses(prev, opts);
         const oldUri = o.properties.find((p) => p.id === id)?.uri;
         const newUri = patch.uri ?? oldUri;
         const renamed = !!oldUri && !!newUri && oldUri !== newUri;

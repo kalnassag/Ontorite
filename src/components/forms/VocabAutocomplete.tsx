@@ -48,11 +48,19 @@ interface Props {
    * Local entries always emit their `.uri` field.
    */
   outputAs?: "uri" | "compact";
+  /**
+   * When set, typed text that doesn't exactly match a local entry offers a
+   * "+ New {createNoun} “text”" row, and Enter on free text calls this instead
+   * of committing the raw text.
+   */
+  onCreate?: (text: string) => void;
+  createNoun?: string;
 }
 
 type Suggestion =
   | { source: "vocab"; entry: VocabEntry }
-  | { source: "local"; entry: LocalSuggestion };
+  | { source: "local"; entry: LocalSuggestion }
+  | { source: "create"; text: string };
 
 export default function VocabAutocomplete({
   value,
@@ -63,6 +71,8 @@ export default function VocabAutocomplete({
   localEntries = [],
   className = "",
   outputAs = "uri",
+  onCreate,
+  createNoun = "class",
 }: Props) {
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
@@ -139,10 +149,23 @@ export default function VocabAutocomplete({
       .slice(0, 8)
       .map((entry) => ({ source: "local" as const, entry }));
     const vocab = searchVocab(query, filter).map((entry) => ({ source: "vocab" as const, entry }));
-    return [...localFiltered, ...vocab].slice(0, 14);
-  }, [query, filter, localEntries]);
+    // Offer to create a new entity unless the text names an existing one or is an IRI / prefixed name
+    const typed = query.trim();
+    const exact = localEntries.some((e) =>
+      e.localName.toLowerCase() === typed.toLowerCase() || e.label.toLowerCase() === typed.toLowerCase());
+    const create: Suggestion[] = onCreate && typed && !exact && !typed.includes(":")
+      ? [{ source: "create", text: typed }]
+      : [];
+    return [...localFiltered, ...create, ...vocab].slice(0, 14);
+  }, [query, filter, localEntries, onCreate]);
 
   const select = (s: Suggestion) => {
+    if (s.source === "create") {
+      setQuery("");
+      setOpen(false);
+      onCreate?.(s.text);
+      return;
+    }
     const emitted =
       s.source === "vocab" && outputAs === "compact"
         ? `${s.entry.prefix}:${s.entry.localName}`
@@ -172,10 +195,12 @@ export default function VocabAutocomplete({
       if (pick) {
         select(pick);
       } else {
-        // Accept the free-text value as a commit
+        // Free text: the parent decides what it means (resolve / create / reject)
         const v = query.trim();
         setOpen(false);
-        if (onPick) onPick(v);
+        if (!v) return;
+        if (onCreate && !v.includes(":")) onCreate(v);
+        else if (onPick) onPick(v);
         else onChange(v);
       }
     } else if (e.key === "Escape") {
@@ -209,6 +234,20 @@ export default function VocabAutocomplete({
         >
           {suggestions.map((s, i) => {
             const isHi = i === highlight;
+            if (s.source === "create") {
+              return (
+                <button
+                  key={`create-${s.text}`}
+                  onMouseDown={(e) => { e.preventDefault(); select(s); }}
+                  onMouseEnter={() => setHighlight(i)}
+                  className={`flex w-full items-baseline gap-2 whitespace-nowrap px-3 py-1.5 text-left text-xs text-blue-500 ${isHi ? "bg-th-hover" : ""}`}
+                >
+                  <span className="flex-shrink-0">+ New {createNoun}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium">“{s.text}”</span>
+                  <span className="ml-auto flex-shrink-0 rounded bg-blue-500/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wide">create</span>
+                </button>
+              );
+            }
             const local = s.source === "local";
             const prefix = s.source === "vocab" ? s.entry.prefix : "";
             const localName = s.entry.localName;

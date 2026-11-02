@@ -7,6 +7,7 @@ import { useStore } from "../../lib/store";
 import { toPascalCase, compact, expand, buildUri } from "../../lib/uri-utils";
 import LabelEditor from "./LabelEditor";
 import ExtraTripleEditor from "./ExtraTripleEditor";
+import { useClassRefs } from "./useClassRefs";
 import VocabAutocomplete, { type LocalSuggestion } from "./VocabAutocomplete";
 import type { OntologyClass, LangString, ExtraTriple } from "../../types";
 
@@ -55,6 +56,8 @@ export default function ClassForm({ existing, onDone }: Props) {
   );
 
   const allClasses = activeOntology?.classes ?? [];
+  // Typed parent names resolve to IRIs; unknown ones become new classes created on save
+  const refs = useClassRefs(allClasses, baseUri, prefixes);
   // Don't allow a class to be its own parent
   const parentOptions = existing
     ? allClasses.filter((c) => c.id !== existing.id)
@@ -94,7 +97,7 @@ export default function ClassForm({ existing, onDone }: Props) {
         subClassOf,
         disjointWith,
         extraTriples: expandedTriples,
-      });
+      }, { newClasses: refs.newClassesFor(subClassOf) });
     } else {
       addClass({
         localName: effectiveName,
@@ -104,9 +107,14 @@ export default function ClassForm({ existing, onDone }: Props) {
         subClassOf,
         disjointWith,
         extraTriples: expandedTriples,
-      });
+      }, { newClasses: refs.newClassesFor(subClassOf) });
     }
     onDone();
+  };
+
+  const addParent = (text: string) => {
+    const uri = refs.resolveClass(text, "subClassOf");
+    if (uri && !subClassOf.includes(uri) && uri !== existing?.uri) toggleParent(uri);
   };
 
   const toggleParent = (uri: string) => {
@@ -246,10 +254,9 @@ export default function ClassForm({ existing, onDone }: Props) {
                 {subClassOf.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {subClassOf.map((uri) => {
-                      const cls = parentOptions.find((c) => c.uri === uri);
                       return (
                         <span key={uri} className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-2xs text-blue-800 dark:bg-blue-700/30 dark:text-blue-300">
-                          {cls?.labels[0]?.value || cls?.localName || uri.split(/[#/]/).pop()}
+                          {refs.classLabel(uri) || uri.split(/[#/]/).pop()}
                           <button onClick={() => toggleParent(uri)} className="opacity-60 hover:opacity-100">×</button>
                         </span>
                       );
@@ -259,9 +266,8 @@ export default function ClassForm({ existing, onDone }: Props) {
                 <VocabAutocomplete
                   value=""
                   onChange={() => { /* per-keystroke noise — ignore */ }}
-                  onPick={(val) => {
-                    if (val && !subClassOf.includes(val)) toggleParent(val);
-                  }}
+                  onPick={addParent}
+                  onCreate={addParent}
                   filter={{ kinds: ["class"] }}
                   localEntries={parentOptions
                     .filter((c) => !subClassOf.includes(c.uri))
@@ -273,6 +279,7 @@ export default function ClassForm({ existing, onDone }: Props) {
                     }))}
                   placeholder="Add parent class (type to search)…"
                 />
+                {refs.errorFor("subClassOf") && <p className="text-2xs text-red-400">{refs.errorFor("subClassOf")}</p>}
               </div>
             )}
           </div>

@@ -4,6 +4,16 @@ import type {
   IndividualPropertyValue, ClipboardItem, UnmappedTriple, ParseResult, PropertyType,
 } from "../../types";
 import type { SerializationFormat } from "../formats";
+import type { NewClassSpec } from "../class-refs";
+
+/** Options for class / property edits made from a form. */
+export interface EditOptions {
+  /**
+   * Classes the user named in a picker that don't exist yet. They're created
+   * in the same commit (one undo step); any whose URI already exists is skipped.
+   */
+  newClasses?: NewClassSpec[];
+}
 
 export interface OntologyHistory {
   past: Ontology[];
@@ -48,13 +58,13 @@ export interface EditorState {
   updateMetadata: (patch: Partial<OntologyMetadata>) => void;
 
   // ── Classes ────────────────────────────────────────────────────────
-  addClass: (cls: Partial<OntologyClass>) => string;
-  updateClass: (id: string, patch: Partial<OntologyClass>) => void;
+  addClass: (cls: Partial<OntologyClass>, opts?: EditOptions) => string;
+  updateClass: (id: string, patch: Partial<OntologyClass>, opts?: EditOptions) => void;
   deleteClass: (id: string) => void;
 
   // ── Properties ─────────────────────────────────────────────────────
-  addProperty: (prop: Partial<OntologyProperty>) => string;
-  updateProperty: (id: string, patch: Partial<OntologyProperty>) => void;
+  addProperty: (prop: Partial<OntologyProperty>, opts?: EditOptions) => string;
+  updateProperty: (id: string, patch: Partial<OntologyProperty>, opts?: EditOptions) => void;
   deleteProperty: (id: string) => void;
 
   // ── Individuals ────────────────────────────────────────────────────

@@ -211,3 +211,28 @@ describe("other statements and owned axioms", () => {
     expect(store().exportTurtle().match(/owl:qualifiedCardinality 1/g)).toHaveLength(2);
   });
 });
+
+describe("classes named in a property form", () => {
+  it("are created with the property in a single undo step, and linked by IRI", () => {
+    store().createOntology({ ontologyLabel: "R", baseUri: "http://ex.org/r#" });
+    const person = store().addClass({ localName: "Person", uri: "http://ex.org/r#Person" });
+    expect(person).toBeTruthy();
+    store().addProperty(
+      { localName: "drives", type: "owl:ObjectProperty", domain: { kind: "class", uri: "http://ex.org/r#Person" }, ranges: [{ kind: "class", uri: "http://ex.org/r#Vehicle" }] },
+      { newClasses: [{ uri: "http://ex.org/r#Vehicle", localName: "Vehicle", label: "Vehicle" }] },
+    );
+    const vehicle = active().classes.find((c) => c.localName === "Vehicle")!;
+    expect(vehicle.uri).toBe("http://ex.org/r#Vehicle");
+    expect(active().properties[0]!.ranges).toEqual([{ kind: "class", uri: vehicle.uri }]);
+    store().undo();
+    expect(active().classes.map((c) => c.localName)).toEqual(["Person"]);
+    expect(active().properties).toEqual([]);
+  });
+
+  it("don't duplicate a class that already exists", () => {
+    store().createOntology({ ontologyLabel: "R", baseUri: "http://ex.org/r#" });
+    store().addClass({ localName: "Vehicle", uri: "http://ex.org/r#Vehicle" });
+    store().addProperty({ localName: "p" }, { newClasses: [{ uri: "http://ex.org/r#Vehicle", localName: "Vehicle", label: "Vehicle" }] });
+    expect(active().classes).toHaveLength(1);
+  });
+});
