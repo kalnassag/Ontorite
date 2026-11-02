@@ -87,11 +87,15 @@ export default function App() {
     return localStorage.getItem("classBrowserCollapsed") === "true";
   });
   // U2: Toast for undo after delete
-  const [toast, setToast] = useState<{ message: string; action: () => void } | null>(null);
+  const [toast, setToast] = useState<{ message: string; action?: () => void } | null>(null);
+  // Ctrl+Shift+N: open the add-property form on a class card
+  const [addPropertyRequest, setAddPropertyRequest] = useState<{ classId: string; n: number } | null>(null);
   // U9: Keyboard shortcut help overlay
   const [showHelp, setShowHelp] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false);
   const theme = useTheme();
+  const selectedClassIdRef = useRef(selectedClassId);
+  selectedClassIdRef.current = selectedClassId;
 
   // U8: Ref for scrolling to unassigned properties
   const unassignedRef = useRef<HTMLDivElement>(null);
@@ -120,6 +124,12 @@ export default function App() {
     return () => clearTimeout(t);
   }, [importWarnings.length, clearImportWarnings]);
 
+  // U2: Toast helper
+  const showToast = useCallback((message: string, action?: () => void) => {
+    setToast({ message, action });
+  }, []);
+  const dismissToast = useCallback(() => setToast(null), []);
+
   // Global keyboard shortcuts. Undo/redo/new/paste are left to the browser
   // while typing in a field, so native text undo keeps working.
   useEffect(() => {
@@ -138,7 +148,17 @@ export default function App() {
       } else if (key === "y" || (key === "z" && e.shiftKey)) {
         e.preventDefault();
         redo();
-      } else if (key === "n" && !e.shiftKey) {
+      } else if (key === "n" && e.shiftKey) {
+        e.preventDefault();
+        const classId = selectedClassIdRef.current;
+        if (!classId) {
+          showToast("Select a class in the class browser first");
+          return;
+        }
+        setViewMode("classes");
+        setHighlightedClassId(classId);
+        setAddPropertyRequest((prev) => ({ classId, n: (prev?.n ?? 0) + 1 }));
+      } else if (key === "n") {
         e.preventDefault();
         setAddingClass(true);
         setViewMode("classes");
@@ -150,7 +170,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [undo, redo, clipboard, pasteClipboard, saveToFile]);
+  }, [undo, redo, clipboard, pasteClipboard, saveToFile, showToast]);
 
   // Write any debounced saves before the tab is hidden or closed.
   useEffect(() => {
@@ -171,10 +191,6 @@ export default function App() {
     });
   }, []);
 
-  // U2: Toast helper
-  const showToast = useCallback((message: string, action: () => void) => {
-    setToast({ message, action });
-  }, []);
   const handleEntityDeleted = useCallback(
     (label: string) => showToast(`"${label}" deleted`, undo),
     [showToast, undo],
@@ -209,13 +225,17 @@ export default function App() {
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const sortedClasses = useMemo(() => {
     const classes = activeOntology?.classes ?? [];
+    // A class matches on its own labels/local name or on any property nested under it
+    const hit = (localName: string, labels: { value: string }[]) =>
+      localName.toLowerCase().includes(deferredSearch) ||
+      labels.some((l) => l.value.toLowerCase().includes(deferredSearch));
     const matches = deferredSearch
       ? classes.filter((cls) =>
-          cls.localName.toLowerCase().includes(deferredSearch) ||
-          cls.labels.some((l) => l.value.toLowerCase().includes(deferredSearch)))
+          hit(cls.localName, cls.labels) ||
+          (propertiesByDomain.get(cls.id) ?? []).some((p) => hit(p.localName, p.labels)))
       : classes;
     return [...matches].sort((a, b) => a.localName.localeCompare(b.localName));
-  }, [activeOntology?.classes, deferredSearch]);
+  }, [activeOntology?.classes, propertiesByDomain, deferredSearch]);
   const sortedIndividuals = useMemo(() => {
     const individuals = activeOntology?.individuals ?? [];
     const matches = deferredSearch
@@ -317,7 +337,8 @@ export default function App() {
               {/* Search */}
               <input
                 type="search"
-                placeholder={viewMode === "individuals" ? "Filter individuals…" : "Filter classes…"}
+                placeholder="Filter…"
+                title={viewMode === "individuals" ? "Filter individuals" : "Filter classes and properties by label or local name"}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-40 rounded bg-th-input px-2 py-1 text-xs text-th-fg placeholder-th-fg-4 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -639,6 +660,8 @@ export default function App() {
                         defaultExpanded={allExpanded}
                         highlighted={highlightedClassId === cls.id}
                         onDelete={handleEntityDeleted}
+                        search={deferredSearch}
+                        addPropertyRequest={addPropertyRequest?.classId === cls.id ? addPropertyRequest.n : 0}
                       />
                     ))}
                   </div>
@@ -672,9 +695,9 @@ export default function App() {
       {toast && (
         <Toast
           message={toast.message}
-          actionLabel="Undo"
+          actionLabel={toast.action ? "Undo" : undefined}
           onAction={toast.action}
-          onDismiss={() => setToast(null)}
+          onDismiss={dismissToast}
         />
       )}
 

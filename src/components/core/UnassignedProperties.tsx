@@ -24,12 +24,12 @@ const UnassignedProperties = forwardRef<HTMLDivElement>((_, ref) => {
           Unassigned Properties
         </span>
         <span className="ml-1.5 text-2xs text-th-fg-4">
-          ({unassigned.length} without a domain class)
+          ({unassigned.length} without a domain class — drag one onto a class to assign it)
         </span>
       </div>
       <div className="py-1">
         {unassigned.map((prop) => (
-          <PropertyRow key={prop.id} property={prop} />
+          <PropertyRow key={prop.id} property={prop} draggable />
         ))}
       </div>
     </div>

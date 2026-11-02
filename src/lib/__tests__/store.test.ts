@@ -145,3 +145,15 @@ describe("import", () => {
     expect(store().ontologies).toHaveLength(0);
   });
 });
+
+describe("import prefix conflicts", () => {
+  it("warns when a file rebinds a standard prefix", () => {
+    store().importOntology(
+      '@prefix skos: <http://example.org/not-skos#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n<http://ex.org/o> a owl:Ontology .',
+      "x.ttl",
+    );
+    expect(store().importWarnings).toHaveLength(1);
+    expect(store().importWarnings[0]).toMatch(/"skos:".*not-skos/);
+    expect(active().metadata.prefixes.skos).toBe("http://example.org/not-skos#");
+  });
+});

@@ -13,14 +13,17 @@ Protégé, WebVOWL, and PoolParty all display properties as a flat list disconne
 ### Core editing
 - **Create ontologies from scratch** — set a base URI, manage prefix mappings, add multilingual labels and descriptions
 - **Import + export in four formats** — Turtle (`.ttl`), JSON-LD (`.jsonld`), RDF/XML (`.rdf` / `.owl`), and N-Triples (`.nt`). Import format is auto-detected by extension with content sniffing as fallback; export picks via dropdown
-- **Clean, conventional Turtle output** — proper `@prefix` declarations, grouped sections (Classes / Object Properties / Datatype Properties / Annotation Properties / Individuals), trailing-semicolon style
+- **Lossless round-trip** — import → export yields the same RDF graph (checked by an isomorphism test suite). Constructs Ontorite doesn't model — intersections, qualified cardinalities, property chains, `owl:oneOf` — are preserved verbatim, never dropped
+- **Clean, conventional Turtle output** — proper `@prefix` declarations, grouped sections (Classes / Object / Datatype / Annotation Properties / Individuals / Preserved triples), objects grouped with `,`, single-use blank nodes written inline as `[ … ]` and `( … )`
 - **Properties nested under their domain class** — Object, Datatype, and Annotation properties colour-coded (blue / green / amber) and grouped beneath each class card
-- **Unassigned properties bucket** — properties without a domain are surfaced separately, never silently lost
+- **Unassigned properties bucket** — properties without a domain are surfaced separately, never silently lost; drag one onto a class card to assign its domain
+- **Property characteristics** — Functional, Inverse functional, Transitive, Symmetric, Asymmetric, Reflexive and Irreflexive as checkboxes, shown as compact badges on each property row
+- **Cardinality the OWL 2 DL way** — min / max / exact cardinality on a property is written as an `owl:Restriction` on its domain class, and read back onto the property on import
 - **OWL/RDF vocabulary autocomplete** — searchable combobox in range, subClassOf, subPropertyOf, and annotation-predicate fields. Suggests from `owl`, `rdf`, `rdfs`, `xsd`, `skos`, `dcterms`, `foaf`, `schema.org`, `prov`, `dcat`, `void`, `vann` + your in-ontology entities. Matches on local name, label, or full URI
 
 ### Navigation
 - **Class browser panel** — collapsible hierarchy tree for jumping between classes; double-click to navigate and highlight
-- **Search / filter** — live filter across class labels and local names
+- **Search / filter** — live filter across class *and* property labels and local names, with matches highlighted
 - **Expand / collapse all** — one click to open or close every class card
 
 ### Individuals
@@ -43,13 +46,13 @@ Protégé, WebVOWL, and PoolParty all display properties as a flat list disconne
 
 ### Quality
 - **Validation panel** — inline errors and warnings for missing domains, duplicate URIs, type mismatches, and unlabelled entities
-- **Undo / redo** — full history stack (`Ctrl+Z` / `Ctrl+Y`)
+- **Undo / redo** — per-ontology history (`Ctrl+Z` / `Ctrl+Y`); native text undo still works inside fields
 - **Clipboard** — copy a class with all its properties and paste it into the same or a different ontology
 
 ### Usability
 - **Dark and light mode** — persisted per device
 - **Persists across sessions** — everything is saved to IndexedDB automatically; no cloud required
-- **Keyboard shortcuts** — `Ctrl+N` new class, `Ctrl+Z` undo, `Ctrl+Y` redo, `Ctrl+V` paste
+- **Keyboard shortcuts** — `Ctrl+N` new class, `Ctrl+Shift+N` new property on the selected class, `Ctrl+Z` undo, `Ctrl+Y` redo, `Ctrl+V` paste, `Ctrl+S` save
 
 ---
 

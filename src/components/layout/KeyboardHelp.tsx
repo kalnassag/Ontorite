@@ -13,8 +13,9 @@ const MOD = isMac ? "⌘" : "Ctrl";
 
 const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: `${MOD}+N`, action: "New class" },
+  { keys: `${MOD}+Shift+N`, action: "New property on the selected class" },
   { keys: `${MOD}+Z`, action: "Undo" },
-  { keys: `${MOD}+Y`, action: "Redo" },
+  { keys: `${MOD}+Y / ${MOD}+Shift+Z`, action: "Redo" },
   { keys: `${MOD}+V`, action: "Paste" },
   { keys: `${MOD}+S`, action: "Save to file" },
   { keys: "Escape", action: "Cancel / close form" },

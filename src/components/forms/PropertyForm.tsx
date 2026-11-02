@@ -8,6 +8,8 @@ import { domainUris as domainUrisOf } from "../../lib/selectors";
 import { toCamelCase, XSD_TYPES, compact, expand, buildUri } from "../../lib/uri-utils";
 import LabelEditor from "./LabelEditor";
 import ExtraTripleEditor from "./ExtraTripleEditor";
+import CharacteristicsEditor from "./CharacteristicsEditor";
+import { CHARACTERISTICS, hasCharacteristic } from "../../lib/characteristics";
 import VocabAutocomplete, { type LocalSuggestion } from "./VocabAutocomplete";
 import { classExprFormat } from "../../types";
 import type { OntologyProperty, LangString, PropertyType, ExtraTriple, ClassExpression } from "../../types";
@@ -116,6 +118,12 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
     setRanges((prev) => prev.filter((r) => rangeKey(r) !== k));
   };
 
+  // Characteristics live in extraTriples as rdf:type entries; they get their own
+  // checkboxes, so keep them out of the generic extra-triples editor.
+  const toFull = (v: string) => expand(v, prefixes);
+  const isCharacteristic = (t: ExtraTriple) => CHARACTERISTICS.some((ch) => hasCharacteristic([t], ch.iri, toFull));
+  const otherExtraTriples = extraTriples.filter((t) => !isCharacteristic(t));
+
   const derivedLocalName = localNameManual
     ? localName
     : toCamelCase(labels[0]?.value ?? "");
@@ -128,9 +136,12 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
     const cleanLabels = labels.filter((l) => l.value.trim());
     const cleanDescs = descriptions.filter((d) => d.value.trim());
 
-    // Expand prefixed names back to full URIs
+    // Expand prefixed names back to full URIs; drop characteristics that don't
+    // apply to the (possibly changed) property type.
     const expandedTriples = extraTriples
       .filter((t) => t.predicate.trim() && t.object.trim())
+      .filter((t) => !isCharacteristic(t) || CHARACTERISTICS.some(
+        (ch) => ch.appliesTo.includes(propType) && hasCharacteristic([t], ch.iri, toFull)))
       .map((t) => ({
         ...t,
         predicate: expand(t.predicate, prefixes),
@@ -528,6 +539,8 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
         </div>
       )}
 
+      <CharacteristicsEditor propType={propType} values={extraTriples} onChange={setExtraTriples} prefixes={prefixes} />
+
       {/* Cardinality */}
       <div>
         <label className="mb-1 block text-2xs font-medium uppercase tracking-wide text-th-fg-3">
@@ -572,7 +585,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
             </>
           )}
         </div>
-        <p className="mt-0.5 text-2xs text-th-fg-4">Simplified constraints — not OWL 2 restriction blank nodes</p>
+        <p className="mt-0.5 text-2xs text-th-fg-4">Exported as an OWL restriction on each domain class (owl:Thing if none)</p>
       </div>
 
       {/* Extra triples (prov:wasQuotedFrom, skos:*, etc.) */}
@@ -580,7 +593,10 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
         <label className="mb-1 block text-2xs font-medium uppercase tracking-wide text-th-fg-3">
           Additional Annotations
         </label>
-        <ExtraTripleEditor values={extraTriples} onChange={setExtraTriples} />
+        <ExtraTripleEditor
+          values={otherExtraTriples}
+          onChange={(next) => setExtraTriples([...next, ...extraTriples.filter(isCharacteristic)])}
+        />
       </div>
 
       {/* Actions */}

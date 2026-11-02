@@ -2,7 +2,8 @@ import { memo, useState, useEffect, useRef } from 'react';
 import { useStore } from "../../lib/store";
 import { useActivePrefixes, useActiveClasses } from "../../lib/store-hooks";
 import { compact } from "../../lib/uri-utils";
-import PropertyRow from './PropertyRow';
+import PropertyRow, { PROPERTY_DRAG_TYPE } from './PropertyRow';
+import Highlight from './Highlight';
 import ClassForm from '../forms/ClassForm';
 import PropertyForm from '../forms/PropertyForm';
 import type { OntologyClass, OntologyProperty } from "../../types";
@@ -18,6 +19,10 @@ interface Props {
   highlighted?: boolean;
   /** Called after deleting this class or one of its properties — for undo toast */
   onDelete?: (label: string) => void;
+  /** Current filter text, highlighted in labels */
+  search?: string;
+  /** Bump to open the add-property form (Ctrl+Shift+N) */
+  addPropertyRequest?: number;
 }
 
 const TYPE_ORDER: Array<'owl:ObjectProperty' | 'owl:DatatypeProperty' | 'owl:AnnotationProperty'> = [
@@ -38,7 +43,7 @@ const TYPE_COLOR: Record<string, string> = {
   'owl:AnnotationProperty': 'text-prop-annotation-500',
 };
 
-function ClassCard({ cls, properties, defaultExpanded = true, highlighted = false, onDelete }: Props) {
+function ClassCard({ cls, properties, defaultExpanded = true, highlighted = false, onDelete, search, addPropertyRequest = 0 }: Props) {
   const deleteClass = useStore((s) => s.deleteClass);
   const copyClass = useStore((s) => s.copyClass);
   const pasteClipboard = useStore((s) => s.pasteClipboard);
@@ -52,6 +57,37 @@ function ClassCard({ cls, properties, defaultExpanded = true, highlighted = fals
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [editingClass, setEditingClass] = useState(false);
   const [addingProperty, setAddingProperty] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const updateProperty = useStore((s) => s.updateProperty);
+
+  useEffect(() => {
+    if (addPropertyRequest === 0) return;
+    setExpanded(true);
+    setEditingClass(false);
+    setAddingProperty(true);
+  }, [addPropertyRequest]);
+
+  // Drop an (unassigned) property here to make this class its domain
+  const isPropertyDrag = (e: React.DragEvent) => e.dataTransfer.types.includes(PROPERTY_DRAG_TYPE);
+  const dropHandlers = {
+    onDragOver: (e: React.DragEvent) => {
+      if (!isPropertyDrag(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      setDragOver(true);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOver(false);
+    },
+    onDrop: (e: React.DragEvent) => {
+      const propertyId = e.dataTransfer.getData(PROPERTY_DRAG_TYPE);
+      setDragOver(false);
+      if (!propertyId) return;
+      e.preventDefault();
+      updateProperty(propertyId, { domain: { kind: "class", uri: cls.uri } });
+      setExpanded(true);
+    },
+  };
   const [showNotes, setShowNotes] = useState(false);
   // E9: Warn before deleting a class with properties
   const [pendingDelete, setPendingDelete] = useState(false);
@@ -97,8 +133,9 @@ function ClassCard({ cls, properties, defaultExpanded = true, highlighted = fals
   return (
     <div
       ref={cardRef}
+      {...dropHandlers}
       className={`rounded border bg-th-surface transition-shadow duration-300 [contain-intrinsic-size:auto_160px] [content-visibility:auto] ${
-        highlighted ? "border-blue-500 ring-2 ring-blue-500/60" : "border-th-border-muted"
+        highlighted || dragOver ? "border-blue-500 ring-2 ring-blue-500/60" : "border-th-border-muted"
       }`}
     >
       {/* Header */}
@@ -114,7 +151,7 @@ function ClassCard({ cls, properties, defaultExpanded = true, highlighted = fals
         <div className="group flex min-w-0 flex-1 items-start gap-2 py-1.5 pr-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
-              <span className="text-base font-semibold text-th-fg">{primaryLabel}</span>
+              <span className="text-base font-semibold text-th-fg"><Highlight text={primaryLabel} query={search} /></span>
               {/* Additional labels */}
               {allLabels.slice(1).map((lbl, i) => (
                 <span key={i} className="text-xs text-th-fg-3">
@@ -276,6 +313,7 @@ function ClassCard({ cls, properties, defaultExpanded = true, highlighted = fals
                         property={prop}
                         onDelete={onDelete}
                         viewedFromClassUri={cls.uri}
+                        search={search}
                       />
                     ))}
                   </div>

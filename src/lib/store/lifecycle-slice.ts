@@ -22,6 +22,14 @@ type LifecycleKeys =
 
 const formatParseError = (err: ParseError) => (err.line ? `Line ${err.line}: ${err.message}` : err.message);
 
+/** Standard prefixes the file rebinds to a different namespace (the file's binding wins). */
+export function prefixConflicts(filePrefixes: Record<string, string>): string[] {
+  return Object.entries(filePrefixes)
+    .filter(([prefix, uri]) => STANDARD_PREFIXES[prefix] !== undefined && STANDARD_PREFIXES[prefix] !== uri)
+    .map(([prefix, uri]) =>
+      `Prefix "${prefix}:" is bound to <${uri}> in this file, not the standard <${STANDARD_PREFIXES[prefix]}> — kept the file's binding.`);
+}
+
 function newOntology(meta: Partial<OntologyMetadata>): Ontology {
   const now = new Date().toISOString();
   const baseUri = meta.baseUri || "http://example.org/ontology/";
@@ -149,7 +157,7 @@ export const lifecycleSlice: Slice<LifecycleKeys> = (set, get, { commit, persist
       set((s) => ({
         ontologies: [...s.ontologies, onto],
         activeOntologyId: onto.id,
-        importWarnings: parsed.errors.map(formatParseError),
+        importWarnings: [...parsed.errors.map(formatParseError), ...prefixConflicts(model.metadata.prefixes)],
       }));
       saveOntology(onto);
       return onto.id;
