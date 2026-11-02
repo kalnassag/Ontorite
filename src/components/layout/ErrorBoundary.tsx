@@ -1,7 +1,17 @@
+/**
+ * Error boundary — the one place React still requires a class component.
+ *
+ * Without props it renders the full-screen fallback (used around the whole
+ * app). With `fallback` it renders that instead, e.g. inline in a single view,
+ * and `resetKey` clears the error when it changes (switching views).
+ */
+
 import { Component, type ReactNode, type ErrorInfo } from "react";
 
 interface Props {
   children: ReactNode;
+  fallback?: (error: Error) => ReactNode;
+  resetKey?: unknown;
 }
 
 interface State {
@@ -23,7 +33,14 @@ export default class ErrorBoundary extends Component<Props, State> {
     console.error("[ErrorBoundary] Uncaught error:", error, info);
   }
 
+  componentDidUpdate(prev: Props) {
+    if (this.state.hasError && prev.resetKey !== this.props.resetKey) this.setState({ hasError: false, error: null });
+  }
+
   render() {
+    if (this.state.hasError && this.props.fallback && this.state.error) {
+      return this.props.fallback(this.state.error);
+    }
     if (this.state.hasError) {
       return (
         <div className="flex h-screen flex-col items-center justify-center gap-4 bg-th-base px-8 text-center">
