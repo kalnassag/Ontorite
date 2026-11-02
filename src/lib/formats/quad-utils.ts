@@ -27,6 +27,23 @@ function termToSubjectOrPredicate(term: RdfTerm): string {
   return term.value;
 }
 
+/**
+ * Conventional BCP 47 casing (en-AU, zh-Hant-TW, de-CH-1996). Language tags are
+ * case-insensitive in RDF and some parsers (N3) lowercase them; this restores
+ * the familiar form for display without changing meaning.
+ */
+export function formatLangTag(tag: string): string {
+  let afterSingleton = false;
+  return tag.split("-").map((sub, i) => {
+    const lower = sub.toLowerCase();
+    if (i === 0 || afterSingleton) return lower;
+    if (sub.length === 1) { afterSingleton = true; return lower; }
+    if (sub.length === 2) return lower.toUpperCase();
+    if (sub.length === 4 && /^[a-z]+$/i.test(sub)) return lower[0]!.toUpperCase() + lower.slice(1);
+    return lower;
+  }).join("-");
+}
+
 export function quadToParsedTriple(q: RdfQuad): ParsedTriple {
   const s = termToSubjectOrPredicate(q.subject);
   const p = termToSubjectOrPredicate(q.predicate);
@@ -38,7 +55,7 @@ export function quadToParsedTriple(q: RdfQuad): ParsedTriple {
       p,
       o: q.object.value,
       isLiteral: true,
-      lang: q.object.language || undefined,
+      lang: q.object.language ? formatLangTag(q.object.language) : undefined,
       datatype: isPlain ? undefined : datatype,
     };
   }

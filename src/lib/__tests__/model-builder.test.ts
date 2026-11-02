@@ -85,3 +85,12 @@ describe("buildModelFromTriples", () => {
     expect(model.unmappedTriples.some((t) => t.object === "Konstrukte")).toBe(true);
   });
 });
+
+describe("language tags", () => {
+  it("keeps conventional BCP 47 casing", () => {
+    const { triples } = parseTurtle(
+      `<http://a> <http://b> "x"@en-AU , "y"@zh-hant-tw , "z"@EN , "w"@en-x-twain .`,
+    );
+    expect(triples.map((t) => t.lang)).toEqual(["en-AU", "zh-Hant-TW", "en", "en-x-twain"]);
+  });
+});
