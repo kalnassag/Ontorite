@@ -16,6 +16,8 @@ import ValidationPanel from "../core/ValidationPanel";
 import ClassBrowserPanel from "./ClassBrowserPanel";
 import Toast from "./Toast";
 import KeyboardHelp from "./KeyboardHelp";
+import ErrorBoundary from "./ErrorBoundary";
+import ViewLoadError from "./ViewLoadError";
 import { validate } from "../../lib/validation";
 import { propertiesByDomain as propertiesByDomainOf, unassignedProperties } from "../../lib/selectors";
 import type { OntologyProperty } from "../../types";
@@ -585,7 +587,8 @@ export default function App() {
               </div>
             )}
 
-            {/* Content: graph, entity-graph, diff, classes, or individuals */}
+            {/* Content: graph, entity-graph, diff, source, classes, or individuals — a failing view doesn't take down the app */}
+            <ErrorBoundary resetKey={viewMode} fallback={(error) => <div className="flex-1 overflow-auto"><ViewLoadError error={error} /></div>}>
             {viewMode === "diff" ? (
               <div className="relative flex-1 overflow-hidden">
                 <Suspense fallback={viewFallback}><OntologyDiff /></Suspense>
@@ -705,6 +708,7 @@ export default function App() {
                 </div>
               </div>
             )}
+            </ErrorBoundary>
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center">

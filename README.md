@@ -123,6 +123,8 @@ npm install
 npm run dev
 ```
 
+After pulling updates, run `npm install` again before `npm run dev` — new features can add dependencies (the Source view needs CodeMirror). If a view then shows *"This view's code couldn't be loaded"*, restart the dev server with `npx vite --force`.
+
 Open [http://localhost:5173](http://localhost:5173).
 
 To build for static hosting:
