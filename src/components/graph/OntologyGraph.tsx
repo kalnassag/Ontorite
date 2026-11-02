@@ -1045,12 +1045,12 @@ export default function OntologyGraph({ onClose }: Props) {
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-th-fg-2 hover:bg-th-hover hover:text-th-fg"
                     onClick={() => openPanel({ kind: "new-property", defaultDomainUri: cls?.uri ?? "", ...panelFromClientXY(contextMenu.x, contextMenu.y) })}
                   >
-                    <CirclePlus size={13} className="text-emerald-400" />
+                    <CirclePlus size={13} className="text-emerald-600 dark:text-emerald-400" />
                     Add Property
                   </button>
                   <div className="my-1 border-t border-th-border" />
                   <button
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-400 hover:bg-red-400/10"
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-600 dark:text-red-400 hover:bg-red-400/10"
                     onClick={() => { deleteClass(nodeId); setContextMenu(null); }}
                   >
                     <Trash2 size={12} />
@@ -1085,7 +1085,7 @@ export default function OntologyGraph({ onClose }: Props) {
                     <>
                       <div className="my-1 border-t border-th-border" />
                       <button
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-400 hover:bg-red-400/10"
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-600 dark:text-red-400 hover:bg-red-400/10"
                         onClick={() => { deleteProperty(prop.id); setContextMenu(null); }}
                       >
                         <Trash2 size={12} />
@@ -1181,7 +1181,7 @@ export default function OntologyGraph({ onClose }: Props) {
             <div style={panelStyle} className="rounded-lg border border-th-border shadow-2xl">
               <div className={headerCls}>
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-th-fg">
-                  <CirclePlus size={12} className="text-emerald-400" /> New Property
+                  <CirclePlus size={12} className="text-emerald-600 dark:text-emerald-400" /> New Property
                 </span>
                 <button onClick={close} className="rounded p-0.5 text-th-fg-4 hover:text-th-fg"><X size={13} /></button>
               </div>

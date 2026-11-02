@@ -280,7 +280,7 @@ export default function ClassForm({ existing, onDone }: Props) {
                     }))}
                   placeholder="Add parent class (type to search)…"
                 />
-                {refs.errorFor("subClassOf") && <p className="text-2xs text-red-400">{refs.errorFor("subClassOf")}</p>}
+                {refs.errorFor("subClassOf") && <p className="text-2xs text-red-600 dark:text-red-400">{refs.errorFor("subClassOf")}</p>}
               </div>
             )}
           </div>

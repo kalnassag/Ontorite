@@ -75,7 +75,7 @@ export default function CreateEdgeDialog({
           {/* Property picker */}
           <div>
             <label className="mb-1 block text-xs font-medium text-th-fg-2">
-              Property <span className="text-red-400">*</span>
+              Property <span className="text-red-600 dark:text-red-400">*</span>
             </label>
             {objectProperties.length === 0 ? (
               <p className="text-xs text-th-fg-4">

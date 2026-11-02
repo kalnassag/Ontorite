@@ -48,11 +48,12 @@ export interface EditorState {
   // ── Lifecycle ──────────────────────────────────────────────────────
   init: () => Promise<void>;
   createOntology: (meta: Partial<OntologyMetadata>) => string;
-  importOntology: (turtleText: string, fileName: string) => string;
+  /** `recordFileName: false` for content that didn't come from a file (the built-in library) */
+  importOntology: (turtleText: string, fileName: string, opts?: { recordFileName?: boolean }) => string;
   importOntologyAsync: (text: string, fileName: string) => Promise<string>;
   importOntologyWithHandle: (turtleText: string, fileName: string, handle: FileSystemFileHandle) => string;
   /** Shared import tail: build the model, add it, and activate it. Throws on fatal parse errors. */
-  _addImported: (parsed: ParseResult, fileName: string) => string;
+  _addImported: (parsed: ParseResult, fileName: string, opts?: { recordFileName?: boolean }) => string;
   deleteOntology: (id: string) => void;
   setActiveOntology: (id: string | null) => void;
   updateMetadata: (patch: Partial<OntologyMetadata>) => void;

@@ -8,6 +8,7 @@
     --th-base: #ffffff;
     --th-surface: #f8fafc;
     --th-input: #f1f5f9;
+    --th-input-border: #cbd5e1;
     --th-hover: #e2e8f0;
     --th-border: #cbd5e1;
     --th-border-muted: #e2e8f0;
@@ -25,10 +26,20 @@
     --syn-punct: #64748b;
   }
 
+  /* Every text-entry control gets a visible edge in both themes; a component's
+     own border-* utility still wins (utilities come after the base layer). */
+  input:where(:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="hidden"])),
+  textarea,
+  select {
+    border: 1px solid var(--th-input-border);
+  }
+
   .dark {
     --th-base: #0f172a;
     --th-surface: #1e293b;
-    --th-input: #1e293b;
+    /* Inputs sit darker than both the page and cards, with a visible edge */
+    --th-input: #0b1221;
+    --th-input-border: #44536b;
     --th-hover: #334155;
     --th-border: #475569;
     --th-border-muted: #334155;

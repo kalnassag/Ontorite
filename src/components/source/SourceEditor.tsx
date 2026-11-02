@@ -206,7 +206,7 @@ export default function SourceEditor({ ontology }: { ontology: Ontology }) {
 
 function StatusLine({ status, dirty, commentCount }: { status: Status; dirty: boolean; commentCount: number }) {
   if (status.kind === "error") {
-    return <span className="flex items-center gap-1 text-red-400"><AlertCircle size={12} /> {status.message}</span>;
+    return <span className="flex items-center gap-1 text-red-600 dark:text-red-400"><AlertCircle size={12} /> {status.message}</span>;
   }
   if (status.kind === "applied") {
     return <span className="flex items-center gap-1 text-emerald-500"><CheckCircle2 size={12} /> {status.message}</span>;

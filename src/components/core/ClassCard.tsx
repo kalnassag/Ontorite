@@ -173,7 +173,7 @@ function ClassCard({ cls, properties, defaultExpanded = true, highlighted = fals
             {/* Disjoint classes */}
             {(cls.disjointWith ?? []).length > 0 && (
               <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                <span className="text-2xs text-red-400" title="owl:disjointWith">⊥</span>
+                <span className="text-2xs text-red-600 dark:text-red-400" title="owl:disjointWith">⊥</span>
                 {(cls.disjointWith ?? []).map((uri, i) => {
                   const disjCls = allClasses.find((c) => c.uri === uri);
                   return (

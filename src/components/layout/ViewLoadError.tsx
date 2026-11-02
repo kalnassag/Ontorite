@@ -24,7 +24,7 @@ export default function ViewLoadError({ error }: { error: Error }) {
             <li>Using a deployed copy? It was probably updated since this page loaded — reload.</li>
           </ul>
         ) : (
-          <pre className="overflow-auto font-mono text-2xs text-red-400">{error.message}</pre>
+          <pre className="overflow-auto font-mono text-2xs text-red-600 dark:text-red-400">{error.message}</pre>
         )}
         <div className="flex items-center gap-2 pt-1">
           <button onClick={() => window.location.reload()} className="rounded bg-blue-600 px-3 py-1 font-medium text-white hover:bg-blue-500">

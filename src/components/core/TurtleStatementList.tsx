@@ -153,7 +153,7 @@ export function SnippetEditor({ initial, placeholder, onSave, onCancel }: Editor
           error ? "ring-1 ring-red-500 focus:ring-red-500" : "focus:ring-blue-500"
         }`}
       />
-      {error && <p className="text-2xs text-red-400">{error}</p>}
+      {error && <p className="text-2xs text-red-600 dark:text-red-400">{error}</p>}
       <div className="flex items-center gap-1.5">
         <button onClick={save} className="rounded bg-blue-600 px-2 py-0.5 text-2xs font-medium text-white hover:bg-blue-500">
           Save

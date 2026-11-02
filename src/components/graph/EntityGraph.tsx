@@ -545,7 +545,7 @@ export default function EntityGraph() {
             }}
             className={`flex items-center gap-1 rounded px-2 py-1 text-2xs font-medium ${
               edgeCreationMode
-                ? "bg-amber-500/20 text-amber-400 ring-1 ring-amber-400"
+                ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 ring-1 ring-amber-400"
                 : "text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
             }`}
             title={edgeCreationMode ? "Cancel relationship mode" : "Add relationship between entities"}
@@ -678,7 +678,7 @@ export default function EntityGraph() {
                   deleteIndividual(selectedIndividual.id);
                   setSelectedEntityId(null);
                 }}
-                className="ml-2 rounded p-1 text-red-400 hover:bg-red-400/10"
+                className="ml-2 rounded p-1 text-red-600 dark:text-red-400 hover:bg-red-400/10"
                 title="Delete entity"
               >
                 <Trash2 size={12} />
@@ -763,7 +763,7 @@ export default function EntityGraph() {
                     Add Relationship from here
                   </button>
                   <button
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-400 hover:bg-red-400/10"
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-600 dark:text-red-400 hover:bg-red-400/10"
                     onClick={() => {
                       deleteIndividual(contextMenu.nodeId!);
                       if (selectedEntityId === contextMenu.nodeId) setSelectedEntityId(null);

@@ -130,8 +130,10 @@ Each property has:
 ```
 src/
   components/
-    layout/   App (root layout + shortcuts), OntologyList (sidebar), ClassBrowserPanel,
-              Drawer, Toast, KeyboardHelp, ErrorBoundary
+    layout/   App (root layout + shortcuts), TopBar (title, file, view tabs, actions —
+              never clips: labels → icons → wrap, measured), OntologyList (sidebar),
+              ClassBrowserPanel, ResizeHandle + usePaneWidth (resizable side panes),
+              Drawer, Toast, KeyboardHelp, ErrorBoundary, ViewLoadError
     core/     ClassCard, PropertyRow, IndividualCard, UnassignedProperties,
               TurtleStatementList (an entity's "Other axioms" as Turtle),
               OtherStatements (subject-less statements), ClassHierarchyTree,
@@ -301,6 +303,10 @@ The serializer in `src/lib/turtle-serializer.ts` must produce:
 - **Show URIs on demand.** Default to showing labels; show full URI on hover or
   in an expanded detail view.
 - **Error states are visible.** Validation issues surface inline, not in a hidden panel.
+- **Both themes, always.** Colours come from the `--th-*` variables in `index.css`, or
+  Tailwind colours with an explicit `dark:` pair (e.g. `text-amber-800 dark:text-amber-300`).
+  Never a dark-only shade like `text-amber-300` on its own — it washes out in light mode.
+  Text inputs get a visible border from the base layer (`--th-input-border`).
 
 ## Coding Standards
 
