@@ -12,8 +12,12 @@
  *   - `[ a owl:Restriction ; owl:onProperty :p ; owl:someValuesFrom :C ]`
  *     (or allValuesFrom / hasValue / min / max / cardinality) used as the
  *     object of exactly one `rdfs:subClassOf` from a class
- * Every other blank node (intersections, qualified cardinalities, property
- * chains, …) round-trips through the preserved-triples bucket.
+ * Every other blank-node structure (intersections, qualified cardinalities,
+ * property chains, …) is kept as raw triples, owned by the statement that
+ * references it when there is exactly one (see raw-triples.ts).
+ *
+ * Statements about the ontology itself go to its header: owl:imports to
+ * `metadata.imports`, anything untyped to `metadata.extraTriples`.
  */
 
 import type {
@@ -22,6 +26,7 @@ import type {
   LangString, PropertyType,
 } from "../types";
 import { localName as extractLocalName, namespace } from "./uri-utils";
+import { attachBlankNodeClosures } from "./raw-triples";
 import {
   RDF, RDFS, OWL, SKOS, DCT, XSD, OBJECT_PROPERTY_CHARACTERISTICS, WELL_KNOWN_NAMESPACES, isBlankNode,
 } from "./vocab";
@@ -229,6 +234,8 @@ export function buildModelFromTriples(parsed: ParseResult): BuiltModel {
     ontologyComment: "",
     versionIRI: "",
     versionInfo: "",
+    imports: [],
+    extraTriples: [],
     editorialNotes: [],
     prefixes,
     defaultLanguage: "en",
@@ -253,7 +260,12 @@ export function buildModelFromTriples(parsed: ParseResult): BuiltModel {
       if (t.isLiteral && t.p === SKOS.editorialNote) { metadata.editorialNotes.push(toLangString(t)); continue; }
       if (isTimestamp(t) && t.p === DCT.created && !metadata.created) { metadata.created = t.o; continue; }
       if (isTimestamp(t) && t.p === DCT.modified && !metadata.modified) { metadata.modified = t.o; continue; }
-      keepUnmapped(t);
+      if (isIri(t) && t.p === OWL.imports) {
+        if (!metadata.imports.includes(t.o)) metadata.imports.push(t.o);
+        continue;
+      }
+      // Anything else about the ontology (dcterms:license, extra labels, …) stays in its header
+      metadata.extraTriples.push(toExtra(t));
     }
   }
 
@@ -330,13 +342,17 @@ export function buildModelFromTriples(parsed: ParseResult): BuiltModel {
     }
   }
 
-  return {
+  // Blank-node structures referenced from a single statement (an unmodelled
+  // class expression, a header annotation's [ … ] value) move in with it.
+  const { id: _id, createdAt: _c, updatedAt: _u, ...model } = attachBlankNodeClosures({
+    id: "", createdAt: "", updatedAt: "",
     metadata,
     classes: Array.from(classMap.values()),
     properties: Array.from(propMap.values()),
     individuals: Array.from(individualMap.values()),
     unmappedTriples,
-  };
+  });
+  return model;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

@@ -18,6 +18,8 @@ function makeOntology(): Ontology {
       ontologyComment: '',
       versionIRI: '',
       versionInfo: '',
+      imports: [],
+      extraTriples: [],
       editorialNotes: [],
       prefixes: {},
       defaultLanguage: 'en',
@@ -170,6 +172,8 @@ describe('hoistClassExpressions — blank-node union → ClassExpression', () =>
         ontologyUri: 'http://example.org/Onto',
         ontologyLabel: '',
         ontologyComment: '',
+        imports: [],
+        extraTriples: [],
         versionIRI: '',
         versionInfo: '',
         editorialNotes: [],
@@ -218,5 +222,26 @@ describe('hoistClassExpressions — blank-node union → ClassExpression', () =>
     const snapshot = JSON.stringify(onto);
     hoistClassExpressions(onto);
     expect(JSON.stringify(onto)).toBe(snapshot);
+  });
+});
+
+describe('moveHeaderTriples + closure ownership on load', () => {
+  it('moves owl:imports and header annotations out of unmappedTriples', async () => {
+    const { migrateOntology } = await import('../store/migrations');
+    const onto = makeOntology();
+    onto.unmappedTriples = [
+      { subject: 'http://example.org/Onto', predicate: 'http://www.w3.org/2002/07/owl#imports', object: 'http://xmlns.com/foaf/0.1/', isLiteral: false },
+      { subject: 'http://example.org/Onto', predicate: 'http://purl.org/dc/terms/license', object: 'http://cc.org/by', isLiteral: false },
+      { subject: '_:r', predicate: 'http://www.w3.org/2002/07/owl#onProperty', object: 'http://example.org/p', isLiteral: false },
+    ];
+    onto.classes[0]!.extraTriples.push({ predicate: 'http://www.w3.org/2000/01/rdf-schema#subClassOf', object: '_:r', isLiteral: false });
+    delete (onto.metadata as Partial<Ontology['metadata']>).imports;
+    delete (onto.metadata as Partial<Ontology['metadata']>).extraTriples;
+    migrateOntology(onto);
+    expect(onto.metadata.imports).toEqual(['http://xmlns.com/foaf/0.1/']);
+    expect(onto.metadata.extraTriples.map((e) => e.object)).toEqual(['http://cc.org/by']);
+    expect(onto.unmappedTriples).toEqual([]);
+    const owner = onto.classes[0]!.extraTriples.find((e) => e.object === '_:r')!;
+    expect(owner.blankNodeTriples).toHaveLength(1);
   });
 });

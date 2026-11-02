@@ -67,6 +67,10 @@ export default function ClassForm({ existing, onDone }: Props) {
   const computedUri = buildUri(baseUri, derivedLocalName);
   const effectiveUri = uriValue || computedUri;
 
+  // Statements with a blank-node structure are edited as Turtle on the card
+  const isComplex = (t: ExtraTriple) => !!t.blankNodeTriples?.length;
+  const complexCount = extraTriples.filter(isComplex).length;
+
   const handleSave = () => {
     const effectiveName = derivedLocalName.trim() || "UnnamedClass";
     const cleanLabels = labels.filter((l) => l.value.trim());
@@ -336,7 +340,15 @@ export default function ClassForm({ existing, onDone }: Props) {
         <label className="mb-1 block text-2xs font-medium uppercase tracking-wide text-th-fg-3">
           Additional Annotations
         </label>
-        <ExtraTripleEditor values={extraTriples} onChange={setExtraTriples} />
+        <ExtraTripleEditor
+          values={extraTriples.filter((t) => !isComplex(t))}
+          onChange={(next) => setExtraTriples([...next, ...extraTriples.filter(isComplex)])}
+        />
+        {complexCount > 0 && (
+          <p className="mt-1 text-2xs text-th-fg-4">
+            + {complexCount} axiom{complexCount === 1 ? "" : "s"} with nested structure — edit {complexCount === 1 ? "it" : "them"} as Turtle on the card.
+          </p>
+        )}
       </div>
 
       {/* Actions */}

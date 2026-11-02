@@ -42,6 +42,8 @@ function newOntology(meta: Partial<OntologyMetadata>): Ontology {
       ontologyComment: meta.ontologyComment || "",
       versionIRI: meta.versionIRI || "",
       versionInfo: meta.versionInfo || "",
+      imports: meta.imports || [],
+      extraTriples: meta.extraTriples || [],
       editorialNotes: meta.editorialNotes || [],
       created: meta.created ?? now,
       modified: meta.modified ?? now,

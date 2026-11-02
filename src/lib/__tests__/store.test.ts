@@ -157,3 +157,57 @@ describe("import prefix conflicts", () => {
     expect(active().metadata.prefixes.skos).toBe("http://example.org/not-skos#");
   });
 });
+
+describe("other statements and owned axioms", () => {
+  const TTL = `@prefix : <http://ex.org/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://ex.org/onto> a owl:Ontology ; owl:imports <http://xmlns.com/foaf/0.1/> .
+:A a owl:Class ; rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :p ; owl:qualifiedCardinality 1 ; owl:onClass :B ] .
+:B a owl:Class .
+:loose rdfs:label "untyped"@en .`;
+
+  beforeEach(() => { store().importOntology(TTL, "t.ttl"); });
+
+  it("routes Turtle about an existing entity or the ontology to it", () => {
+    store().replaceOtherStatements([], [
+      { subject: "http://ex.org/B", predicate: "http://www.w3.org/2000/01/rdf-schema#seeAlso", object: "http://ex.org/doc", isLiteral: false },
+      { subject: "http://ex.org/onto", predicate: "http://www.w3.org/2002/07/owl#imports", object: "http://purl.org/dc/terms/", isLiteral: false },
+    ]);
+    const b = active().classes.find((c) => c.localName === "B")!;
+    expect(b.extraTriples.map((e) => e.object)).toContain("http://ex.org/doc");
+    expect(active().metadata.imports).toEqual(["http://xmlns.com/foaf/0.1/", "http://purl.org/dc/terms/"]);
+    expect(active().unmappedTriples.map((t) => t.subject)).toEqual(["http://ex.org/loose"]);
+  });
+
+  it("declares an untyped subject as a class, mapping its label", () => {
+    const loose = active().unmappedTriples;
+    const id = store().declareEntity("http://ex.org/loose", loose, "class");
+    const cls = active().classes.find((c) => c.id === id)!;
+    expect(cls.labels).toEqual([{ value: "untyped", lang: "en" }]);
+    expect(active().unmappedTriples).toEqual([]);
+  });
+
+  it("renaming a class updates IRIs inside owned axioms", () => {
+    const b = active().classes.find((c) => c.localName === "B")!;
+    store().updateClass(b.id, { localName: "Bee", uri: "http://ex.org/Bee" });
+    const axiom = active().classes.find((c) => c.localName === "A")!.extraTriples[0]!;
+    expect(axiom.blankNodeTriples!.map((t) => t.object)).toContain("http://ex.org/Bee");
+  });
+
+  it("deleting a class takes its axioms with it", () => {
+    const a = active().classes.find((c) => c.localName === "A")!;
+    store().deleteClass(a.id);
+    expect(store().exportTurtle()).not.toMatch(/qualifiedCardinality/);
+  });
+
+  it("pasting a class gives its axioms fresh blank nodes", () => {
+    const a = active().classes.find((c) => c.localName === "A")!;
+    store().copyClass(a.id);
+    store().pasteClipboard();
+    const [orig, copy] = active().classes.filter((c) => c.localName.startsWith("A"));
+    expect(orig!.extraTriples[0]!.object).not.toBe(copy!.extraTriples[0]!.object);
+    // two independent restrictions in the export
+    expect(store().exportTurtle().match(/owl:qualifiedCardinality 1/g)).toHaveLength(2);
+  });
+});

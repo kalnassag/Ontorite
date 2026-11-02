@@ -1,13 +1,15 @@
 /**
  * Right-side drawer for editing ontology-level metadata:
  * label, comment, baseUri (read-only), default language, version IRI/info,
- * prefix map, and editorial notes.
+ * owl:imports, other header annotations, prefix map, and editorial notes.
  */
 
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import Drawer from "../layout/Drawer";
 import LabelEditor from "../forms/LabelEditor";
+import ImportsEditor from "../forms/ImportsEditor";
+import TurtleStatementList from "../core/TurtleStatementList";
 import { useStore } from "../../lib/store";
 import { lookupPrefixNamespace, WELL_KNOWN_PREFIXES } from "../../lib/vocab-autocomplete";
 import { formatAbsoluteTime, formatTimeSince } from "../../lib/time-format";
@@ -96,6 +98,27 @@ export default function OntologyMetadataDrawer({ open, onClose }: Props) {
             placeholder="1.0.0"
             className="w-full rounded bg-th-input px-2 py-1 text-xs text-th-fg focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
+        </Field>
+
+        <Field
+          label="owl:imports"
+          hint="Recorded and exported, but imported ontologies aren't loaded — their terms are treated as external."
+        >
+          <ImportsEditor
+            imports={md.imports ?? []}
+            prefixes={md.prefixes}
+            onChange={(imports) => updateMetadata({ imports })}
+          />
+        </Field>
+
+        <Field label="Other annotations" hint="Any other statements about the ontology (dcterms:license, dcterms:creator, extra labels…), as Turtle.">
+          <div className="-mx-3">
+            <TurtleStatementList
+              title="Statements"
+              extras={md.extraTriples ?? []}
+              onChange={(extraTriples) => updateMetadata({ extraTriples })}
+            />
+          </div>
         </Field>
 
         <Field label="Editorial notes" hint="Saved as skos:editorialNote on the ontology.">

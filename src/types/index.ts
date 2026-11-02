@@ -14,6 +14,12 @@ export interface ExtraTriple {
   isLiteral: boolean;
   lang?: string;
   datatype?: string;
+  /**
+   * When `object` is a blank node: the triples describing it, including any
+   * nested blank nodes (an OWL class expression, a restriction, a list, …).
+   * Owned by this entry, so the structure moves, copies and deletes with it.
+   */
+  blankNodeTriples?: UnmappedTriple[];
 }
 
 /** Property type discriminator */
@@ -147,6 +153,10 @@ export interface OntologyMetadata {
   versionIRI: string;
   /** owl:versionInfo — human-readable version string (e.g. "1.2.0") */
   versionInfo: string;
+  /** owl:imports — IRIs of imported ontologies */
+  imports: string[];
+  /** Other statements about the ontology (dcterms:license, extra labels, …) */
+  extraTriples: ExtraTriple[];
   /** Multilingual editorial notes on the ontology itself (skos:editorialNote) */
   editorialNotes: LangString[];
   /** ISO 8601 timestamp — dcterms:created on the ontology */
@@ -183,7 +193,11 @@ export interface Individual {
   modified?: string;
 }
 
-/** A triple that the parser found but the model doesn't explicitly support */
+/**
+ * A raw triple the model has no typed field for, whose subject isn't an entity
+ * of this ontology (or is a blank node shared between several statements).
+ * Blank nodes are written `_:label`.
+ */
 export interface UnmappedTriple {
   subject: string;
   predicate: string;

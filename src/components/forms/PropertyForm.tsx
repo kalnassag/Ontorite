@@ -122,7 +122,10 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
   // checkboxes, so keep them out of the generic extra-triples editor.
   const toFull = (v: string) => expand(v, prefixes);
   const isCharacteristic = (t: ExtraTriple) => CHARACTERISTICS.some((ch) => hasCharacteristic([t], ch.iri, toFull));
-  const otherExtraTriples = extraTriples.filter((t) => !isCharacteristic(t));
+  // …and statements with a blank-node structure are edited as Turtle on the card
+  const isComplex = (t: ExtraTriple) => !!t.blankNodeTriples?.length;
+  const complexCount = extraTriples.filter(isComplex).length;
+  const otherExtraTriples = extraTriples.filter((t) => !isCharacteristic(t) && !isComplex(t));
 
   const derivedLocalName = localNameManual
     ? localName
@@ -595,8 +598,13 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
         </label>
         <ExtraTripleEditor
           values={otherExtraTriples}
-          onChange={(next) => setExtraTriples([...next, ...extraTriples.filter(isCharacteristic)])}
+          onChange={(next) => setExtraTriples([...next, ...extraTriples.filter((t) => isCharacteristic(t) || isComplex(t))])}
         />
+        {complexCount > 0 && (
+          <p className="mt-1 text-2xs text-th-fg-4">
+            + {complexCount} axiom{complexCount === 1 ? "" : "s"} with nested structure — edit {complexCount === 1 ? "it" : "them"} as Turtle on the card.
+          </p>
+        )}
       </div>
 
       {/* Actions */}

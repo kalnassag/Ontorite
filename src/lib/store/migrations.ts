@@ -7,6 +7,7 @@
 
 import type { Ontology, OntologyProperty, ClassExpression } from "../../types";
 import { RDF, OWL, SKOS, DCT } from "../vocab";
+import { attachBlankNodeClosures } from "../raw-triples";
 
 /** Bring a persisted ontology up to the current shape. Mutates in place. */
 export function migrateOntology(onto: Ontology): void {
@@ -34,8 +35,34 @@ export function migrateOntology(onto: Ontology): void {
   if (onto.metadata.versionIRI === undefined) onto.metadata.versionIRI = "";
   if (onto.metadata.versionInfo === undefined) onto.metadata.versionInfo = "";
   if (!onto.metadata.editorialNotes) onto.metadata.editorialNotes = [];
+  if (!onto.metadata.imports) onto.metadata.imports = [];
+  if (!onto.metadata.extraTriples) onto.metadata.extraTriples = [];
   sweepLegacyTriples(onto);
   hoistClassExpressions(onto);
+  moveHeaderTriples(onto);
+  // Blank-node structures referenced from one statement move in with it
+  Object.assign(onto, attachBlankNodeClosures(onto));
+}
+
+/**
+ * Older versions left statements about the ontology itself (owl:imports,
+ * dcterms:license, …) in unmappedTriples; they belong to its header.
+ */
+export function moveHeaderTriples(onto: Ontology): void {
+  const ontoUri = onto.metadata.ontologyUri;
+  if (!ontoUri) return;
+  const keep: typeof onto.unmappedTriples = [];
+  for (const t of onto.unmappedTriples) {
+    if (t.subject !== ontoUri) { keep.push(t); continue; }
+    if (t.predicate === OWL.imports && !t.isLiteral && !t.object.startsWith("_:")) {
+      if (!onto.metadata.imports.includes(t.object)) onto.metadata.imports.push(t.object);
+    } else {
+      onto.metadata.extraTriples.push({
+        predicate: t.predicate, object: t.object, isLiteral: t.isLiteral, lang: t.lang, datatype: t.datatype,
+      });
+    }
+  }
+  onto.unmappedTriples = keep;
 }
 
 /**

@@ -15,7 +15,8 @@ import { classExprFormat } from "../../types";
 import { characteristicsOf, CHARACTERISTICS } from "../../lib/characteristics";
 import { RDF } from "../../lib/vocab";
 import Highlight from "./Highlight";
-import type { OntologyProperty } from "../../types";
+import type { ExtraTriple, OntologyProperty } from "../../types";
+import TurtleStatementList from "./TurtleStatementList";
 
 interface Props {
   property: OntologyProperty;
@@ -35,6 +36,7 @@ interface Props {
 /** MIME type for dragging a property onto a class card. */
 export const PROPERTY_DRAG_TYPE = "application/x-ontorite-property";
 const CHARACTERISTIC_IRIS = new Set(CHARACTERISTICS.map((ch) => ch.iri));
+const isCharacteristicTriple = (et: ExtraTriple) => et.predicate === RDF.type && CHARACTERISTIC_IRIS.has(et.object);
 
 const TYPE_BADGE: Record<OntologyProperty["type"], { label: string; className: string }> = {
   "owl:ObjectProperty": { label: "O", className: "bg-prop-object-700 text-prop-object-100" },
@@ -69,8 +71,7 @@ function PropertyRow({ property, onDelete, viewedFromClassUri, search, draggable
     : [];
   const description = property.descriptions[0]?.value;
   const characteristics = characteristicsOf(property);
-  const otherExtras = (property.extraTriples ?? []).filter(
-    (et) => !(et.predicate === RDF.type && CHARACTERISTIC_IRIS.has(et.object)));
+  const otherExtras = (property.extraTriples ?? []).filter((et) => !isCharacteristicTriple(et));
 
   if (editing) {
     return (
@@ -136,18 +137,15 @@ function PropertyRow({ property, onDelete, viewedFromClassUri, search, draggable
             ))}
           </div>
         )}
-        {/* Extra triples (prov:wasQuotedFrom, etc.) */}
+        {/* Statements with no typed field, as Turtle (characteristics are shown as badges) */}
         {otherExtras.length > 0 && (
-          <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
-            {otherExtras.map((et, i) => (
-              <span key={i} className="text-2xs text-th-fg-4">
-                <span className="text-th-fg-3">{compact(et.predicate, prefixes)}</span>
-                {" → "}
-                {et.isLiteral
-                  ? `"${et.object}"${et.lang ? `@${et.lang}` : ""}`
-                  : compact(et.object, prefixes)}
-              </span>
-            ))}
+          <div className="-mx-3">
+            <TurtleStatementList
+              extras={property.extraTriples}
+              hide={isCharacteristicTriple}
+              onChange={(extraTriples) => updateProperty(property.id, { extraTriples })}
+              allowAdd={false}
+            />
           </div>
         )}
         <TimestampFooter created={property.created} modified={property.modified} />

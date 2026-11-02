@@ -1,7 +1,7 @@
 import type { StoreApi } from "zustand";
 import type {
   Ontology, OntologyClass, OntologyMetadata, OntologyProperty, Individual,
-  IndividualPropertyValue, ClipboardItem, UnmappedTriple, ParseResult,
+  IndividualPropertyValue, ClipboardItem, UnmappedTriple, ParseResult, PropertyType,
 } from "../../types";
 import type { SerializationFormat } from "../formats";
 
@@ -65,11 +65,15 @@ export interface EditorState {
   addIndividualProperty: (individualId: string, propVal: IndividualPropertyValue) => void;
   removeIndividualProperty: (individualId: string, propertyIndex: number) => void;
 
-  // ── Unmapped triples ───────────────────────────────────────────────
-  updateUnmappedTriple: (index: number, patch: Partial<UnmappedTriple>) => void;
-  deleteUnmappedTriple: (index: number) => void;
-  /** Move an unmapped triple into a class/property's extraTriples. */
-  promoteUnmappedTriple: (index: number, targetEntityId: string) => void;
+  // ── Other statements (raw triples) ─────────────────────────────────
+  /**
+   * Replace a group of other statements with new raw triples (empty = delete).
+   * New triples about an existing class / property / the ontology are routed
+   * to that entity rather than left in other statements.
+   */
+  replaceOtherStatements: (oldTriples: UnmappedTriple[], newTriples: UnmappedTriple[]) => void;
+  /** Turn an untyped subject's statements into a new class or property. */
+  declareEntity: (subject: string, statements: UnmappedTriple[], kind: "class" | PropertyType) => string | null;
 
   // ── Clipboard (in-memory; survives ontology switching) ─────────────
   clipboard: ClipboardItem | null;

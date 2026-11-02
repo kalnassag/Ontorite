@@ -72,17 +72,38 @@ describe("buildModelFromTriples", () => {
     expect(prop("partOf")!.exactCardinality).toBe(1);
   });
 
-  it("leaves shapes the model can't represent as raw triples", () => {
-    // qualified cardinality and the intersection are referenced via blank nodes
-    expect(cls("Part")!.extraTriples.some((e) => e.object.startsWith("_:"))).toBe(true);
-    expect(cls("Whole")!.extraTriples.some((e) => e.predicate === OWL + "equivalentClass")).toBe(true);
-    expect(model.unmappedTriples.some((t) => t.predicate === OWL + "intersectionOf")).toBe(true);
+  it("keeps unmodelled blank-node structures with the statement that references them", () => {
+    const part = cls("Part")!;
+    const qualified = part.extraTriples.find((e) =>
+      e.blankNodeTriples?.some((t) => t.predicate === OWL + "qualifiedCardinality"));
+    expect(qualified?.predicate).toBe("http://www.w3.org/2000/01/rdf-schema#subClassOf");
+    const equiv = cls("Whole")!.extraTriples.find((e) => e.predicate === OWL + "equivalentClass")!;
+    expect(equiv.blankNodeTriples!.some((t) => t.predicate === OWL + "intersectionOf")).toBe(true);
+    // the nested restriction inside the intersection list is owned too
+    expect(equiv.blankNodeTriples!.some((t) => t.predicate === OWL + "minCardinality")).toBe(true);
+    expect(model.unmappedTriples.some((t) => t.predicate === OWL + "intersectionOf")).toBe(false);
   });
 
-  it("keeps extra ontology labels rather than discarding them", () => {
+  it("puts owl:imports and other header statements on the ontology, not in other statements", () => {
+    expect(model.metadata.imports).toEqual(["http://www.w3.org/2004/02/skos/core", "http://xmlns.com/foaf/0.1/"]);
+    const preds = model.metadata.extraTriples.map((e) => e.predicate.split(/[#/]/).pop());
+    expect(preds).toEqual(expect.arrayContaining(["label", "license", "creator"]));
+    const creator = model.metadata.extraTriples.find((e) => e.predicate.endsWith("creator"))!;
+    expect(creator.blankNodeTriples!.map((t) => t.object)).toContain("Ada Lovelace");
     expect(model.metadata.ontologyLabel).toBe("Constructs");
     expect(model.metadata.ontologyLabelLang).toBe("en");
-    expect(model.unmappedTriples.some((t) => t.object === "Konstrukte")).toBe(true);
+  });
+
+  it("leaves only subject-less or shared statements in other statements", () => {
+    const subjects = new Set(model.unmappedTriples.map((t) => (t.subject.startsWith("_:") ? "_:" : t.subject)));
+    expect([...subjects].sort()).toEqual([
+      "_:",
+      EX + "untyped",
+      "http://example.org/other/path/Weird%20Thing",
+    ]);
+    // the shared node keeps its own triples (it has two referrers)
+    expect(model.unmappedTriples.some((t) => t.object === "shared note")).toBe(true);
+    expect(model.unmappedTriples.some((t) => t.object === OWL + "AllDisjointClasses")).toBe(true);
   });
 });
 

@@ -4,6 +4,7 @@ import { useActivePrefixes, useActiveClasses } from "../../lib/store-hooks";
 import { compact } from "../../lib/uri-utils";
 import PropertyRow, { PROPERTY_DRAG_TYPE } from './PropertyRow';
 import Highlight from './Highlight';
+import TurtleStatementList from './TurtleStatementList';
 import ClassForm from '../forms/ClassForm';
 import PropertyForm from '../forms/PropertyForm';
 import type { OntologyClass, OntologyProperty } from "../../types";
@@ -342,27 +343,12 @@ function ClassCard({ cls, properties, defaultExpanded = true, highlighted = fals
                 </div>
               )}
 
-              {/* Extra triples (prov:wasQuotedFrom, skos:*, etc.) */}
-              {(cls.extraTriples ?? []).length > 0 && (
-                <div>
-                  <div className="px-3 pt-1.5 pb-0.5 text-2xs font-medium uppercase tracking-wide text-th-fg-4">
-                    Additional Annotations
-                  </div>
-                  {(cls.extraTriples ?? []).map((et, i) => (
-                    <div key={i} className="flex items-center gap-2 px-3 py-0.5">
-                      <span className="text-2xs font-medium text-th-fg-3">
-                        {compact(et.predicate, prefixes)}
-                      </span>
-                      <span className="text-2xs text-th-fg-4">→</span>
-                      <span className="text-2xs text-th-fg">
-                        {et.isLiteral
-                          ? `"${et.object}"${et.lang ? `@${et.lang}` : ''}${et.datatype ? `^^${compact(et.datatype, prefixes)}` : ''}`
-                          : compact(et.object, prefixes)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {/* Statements with no typed field, as Turtle (unmodelled axioms, extra annotations) */}
+              <TurtleStatementList
+                extras={cls.extraTriples ?? []}
+                onChange={(extraTriples) => updateClass(cls.id, { extraTriples })}
+                allowAdd={!addingProperty}
+              />
 
               {properties.length === 0 && (cls.extraTriples ?? []).length === 0 && !addingProperty && (
                 <p className="px-3 py-1.5 text-2xs text-th-fg-4">No properties</p>
