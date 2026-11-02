@@ -11,6 +11,7 @@ import { domainUris } from "../../lib/selectors";
 import { compact, buildUri, toCamelCase } from "../../lib/uri-utils";
 import EditorialNotesDrawer from "../dialogs/EditorialNotesDrawer";
 import TimestampFooter from "./TimestampFooter";
+import ClassHover from "../hover/ClassHover";
 import type { Individual, IndividualPropertyValue, OntologyProperty } from "../../types";
 
 interface Props {
@@ -127,9 +128,9 @@ export default function IndividualCard({ individual, defaultExpanded = false }: 
     const isEditing = editingIdx === originalIndex;
     return (
       <div key={originalIndex} className="group flex items-center gap-2 rounded px-2 py-1 hover:bg-th-hover/50">
-        <span className={`min-w-0 flex-shrink-0 text-xs font-medium ${propTypeColor(pv.propertyUri)}`}>
+        <ClassHover uri={pv.propertyUri} className={`min-w-0 flex-shrink-0 text-xs font-medium ${propTypeColor(pv.propertyUri)}`}>
           {propLabel(pv.propertyUri)}
-        </span>
+        </ClassHover>
         <span className="text-xs text-th-fg-4">→</span>
         {isEditing ? (
           <div className="flex flex-1 items-center gap-1">
@@ -149,7 +150,13 @@ export default function IndividualCard({ individual, defaultExpanded = false }: 
           </div>
         ) : (
           <>
-            <span className="min-w-0 flex-1 truncate text-xs text-th-fg">{valueLabel(pv)}</span>
+            {pv.isLiteral ? (
+              <span className="min-w-0 flex-1 truncate text-xs text-th-fg">{valueLabel(pv)}</span>
+            ) : (
+              <span className="min-w-0 flex-1 truncate text-xs text-th-fg">
+                <ClassHover uri={pv.value}>{valueLabel(pv)}</ClassHover>
+              </span>
+            )}
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
               <button onClick={() => { setEditingIdx(originalIndex); setEditValue(pv.value); }} className="rounded p-0.5 text-th-fg-4 hover:text-th-fg-2" title="Edit value"><Pencil size={10} /></button>
               <button onClick={() => removeIndividualProperty(individual.id, originalIndex)} className="rounded p-0.5 text-th-fg-4 hover:text-red-400" title="Remove"><Trash2 size={10} /></button>
@@ -176,9 +183,9 @@ export default function IndividualCard({ individual, defaultExpanded = false }: 
             <div className="flex flex-wrap items-baseline gap-2">
               <span className="text-base font-semibold text-th-fg">{individual.localName}</span>
               {typeLabels.map(({ uri, label }) => (
-                <span key={uri} className="rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-800 ring-1 ring-inset ring-purple-300 dark:bg-purple-500/15 dark:text-purple-400 dark:ring-purple-500/25">
+                <ClassHover key={uri} uri={uri} className="rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-800 ring-1 ring-inset ring-purple-300 dark:bg-purple-500/15 dark:text-purple-400 dark:ring-purple-500/25">
                   {label}
-                </span>
+                </ClassHover>
               ))}
             </div>
             <span className="hidden font-mono text-xs text-th-fg-4 group-hover:inline">{c(individual.uri)}</span>
@@ -273,7 +280,7 @@ export default function IndividualCard({ individual, defaultExpanded = false }: 
                 return (
                   <div key={classUri}>
                     <div className="px-3 pt-1.5 pb-0.5 text-xs font-medium uppercase tracking-wide text-purple-400">
-                      {clsLabel} properties
+                      <ClassHover uri={classUri}>{clsLabel}</ClassHover> properties
                     </div>
                     {props.map((schemaProp) => {
                       const entries = valuesByPropUri.get(schemaProp.uri) ?? [];

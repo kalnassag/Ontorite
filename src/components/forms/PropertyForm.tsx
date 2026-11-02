@@ -12,6 +12,7 @@ import CharacteristicsEditor from "./CharacteristicsEditor";
 import { CHARACTERISTICS, hasCharacteristic } from "../../lib/characteristics";
 import VocabAutocomplete, { type LocalSuggestion } from "./VocabAutocomplete";
 import { useClassRefs } from "./useClassRefs";
+import ChipLabel from "./ChipLabel";
 import { classExprFormat } from "../../types";
 import type { OntologyProperty, LangString, PropertyType, ExtraTriple, ClassExpression } from "../../types";
 
@@ -315,7 +316,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
                     key={uri}
                     className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-2xs text-blue-800 dark:bg-blue-700/30 dark:text-blue-300"
                   >
-                    {label}
+                    <ChipLabel uri={uri} label={label || uri} />
                     <button
                       onClick={() => setDomainUris((prev) => prev.filter((u) => u !== uri))}
                       className="opacity-60 hover:opacity-100"
@@ -367,7 +368,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
                     className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-2xs text-blue-800 dark:bg-blue-700/30 dark:text-blue-300"
                     title={r.kind === "union" ? `owl:unionOf (${r.uris.length} classes)` : undefined}
                   >
-                    {formatRangeChip(r)}
+                    <ChipLabel uri={r.kind === "class" ? r.uri : ""} label={formatRangeChip(r)} />
                     <button
                       onClick={() => removeRangeEntry(r)}
                       className="ml-0.5 opacity-60 hover:opacity-100"
@@ -403,7 +404,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
                     key={rangeKey(r)}
                     className="flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-2xs text-emerald-800 dark:bg-emerald-700/30 dark:text-emerald-300"
                   >
-                    {formatRangeChip(r)}
+                    <ChipLabel uri={r.kind === "class" ? r.uri : ""} label={formatRangeChip(r)} />
                     <button
                       onClick={() => removeRangeEntry(r)}
                       className="ml-0.5 opacity-60 hover:opacity-100"
@@ -430,7 +431,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
                     key={rangeKey(r)}
                     className="flex items-center gap-1 rounded-full bg-th-border px-2 py-0.5 text-2xs text-th-fg-3"
                   >
-                    {formatRangeChip(r)}
+                    <ChipLabel uri={r.kind === "class" ? r.uri : ""} label={formatRangeChip(r)} />
                     <button
                       onClick={() => removeRangeEntry(r)}
                       className="ml-0.5 opacity-60 hover:opacity-100"

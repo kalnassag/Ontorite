@@ -141,6 +141,10 @@ src/
     dialogs/  OntologyMetadataDrawer, EditorialNotesDrawer, CreateEntityDialog, CreateEdgeDialog
     graph/    OntologyGraph (force), TreeGraph (hierarchy), EntityGraph (neighbourhood)
     source/   SourceEditor (Turtle editing view), turtle-editor-setup (CodeMirror config)
+    hover/    ClassHover (wrap any class / property name) + HoverCardHost (the single
+              app-wide hover card, mounted once in App; state in lib/hover-card.ts).
+              Wrap new places that render a class/property name in ClassHover rather
+              than adding `title=` attributes or per-component popovers.
   lib/
     turtle-parser.ts      Turtle/N-Triples → ParsedTriple[] (N3.js adapter, strict)
     model-builder.ts      ParsedTriple[] → domain model (see decision 4)
