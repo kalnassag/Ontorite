@@ -215,6 +215,12 @@ export interface Ontology {
   properties: OntologyProperty[];
   individuals: Individual[];
   unmappedTriples: UnmappedTriple[];
+  /**
+   * Name of the file this ontology was imported from or last saved to
+   * (e.g. "zoo.ttl"). App state, not RDF — never serialized. Undefined for
+   * ontologies created in the app or loaded from the built-in library.
+   */
+  fileName?: string;
   createdAt: string; // ISO timestamp
   updatedAt: string; // ISO timestamp
 }

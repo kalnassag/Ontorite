@@ -3,7 +3,7 @@
  */
 
 import { useRef, useState } from "react";
-import { Plus, Upload, Trash2, ChevronRight, X, Globe, BookOpen, Check } from "lucide-react";
+import { Plus, Upload, Trash2, ChevronRight, X, Globe, BookOpen, Check, FileText } from "lucide-react";
 import { useStore } from "../../lib/store";
 import { supportsFileSystemAccess, openTurtleFile } from "../../lib/file-access";
 import { COMMON_ONTOLOGIES } from "../../lib/common-ontologies";
@@ -162,7 +162,7 @@ export default function OntologyList() {
 
       {/* Inline import error (E4) */}
       {importError && (
-        <p className="text-2xs text-red-400 px-2 py-1">{importError}</p>
+        <p className="text-2xs text-red-600 dark:text-red-400 px-2 py-1">{importError}</p>
       )}
 
       {/* URL import form */}
@@ -178,7 +178,7 @@ export default function OntologyList() {
             className="w-full rounded bg-th-input px-2 py-1 font-mono text-xs text-th-fg placeholder-th-fg-4 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           {urlError && (
-            <p className="text-2xs text-red-400">{urlError}</p>
+            <p className="text-2xs text-red-600 dark:text-red-400">{urlError}</p>
           )}
           <div className="flex gap-1">
             <button
@@ -250,13 +250,13 @@ export default function OntologyList() {
                   <div className="text-2xs text-th-fg-4 leading-snug mt-0.5">{onto.description}</div>
                 </div>
                 {loadedLibraryIds.has(onto.id) ? (
-                  <span className="flex flex-shrink-0 items-center gap-1 text-2xs text-green-400">
+                  <span className="flex flex-shrink-0 items-center gap-1 text-2xs text-green-600 dark:text-green-400">
                     <Check size={11} /> Loaded
                   </span>
                 ) : (
                   <button
                     onClick={() => {
-                      importOntology(onto.turtle, `${onto.id}.ttl`);
+                      importOntology(onto.turtle, `${onto.id}.ttl`, { recordFileName: false });
                       setLoadedLibraryIds((prev) => new Set([...prev, onto.id]));
                     }}
                     className="flex-shrink-0 rounded bg-blue-700 px-2 py-0.5 text-2xs font-medium text-white hover:bg-blue-600"
@@ -301,9 +301,15 @@ export default function OntologyList() {
                       </span>
                     )}
                   </div>
-                  <div className="truncate font-mono text-2xs text-th-fg-4">
-                    {onto.metadata.baseUri}
-                  </div>
+                  {/* The file it lives in when there is one (base URI on hover), else the base URI */}
+                  {onto.fileName ? (
+                    <div className="flex items-center gap-1 truncate text-2xs text-th-fg-3" title={onto.metadata.baseUri}>
+                      <FileText size={10} className="flex-shrink-0" />
+                      <span className="truncate">{onto.fileName}</span>
+                    </div>
+                  ) : (
+                    <div className="truncate font-mono text-2xs text-th-fg-4">{onto.metadata.baseUri}</div>
+                  )}
                 </div>
                 <button
                   onClick={(e) => {

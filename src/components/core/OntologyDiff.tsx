@@ -206,7 +206,7 @@ export default function OntologyDiff() {
                           </button>
                         )}
                         {applied && (
-                          <span className="text-2xs text-green-400">Applied</span>
+                          <span className="text-2xs text-green-600 dark:text-green-400">Applied</span>
                         )}
                       </div>
                       {entry.changes.length > 0 && (
@@ -254,7 +254,7 @@ export default function OntologyDiff() {
                           </button>
                         )}
                         {applied && (
-                          <span className="text-2xs text-green-400">Applied</span>
+                          <span className="text-2xs text-green-600 dark:text-green-400">Applied</span>
                         )}
                       </div>
                       {entry.changes.length > 0 && (

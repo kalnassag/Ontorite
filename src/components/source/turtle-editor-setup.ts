@@ -36,8 +36,32 @@ const theme = EditorView.theme({
   "&.cm-focused": { outline: "none" },
   ".cm-tooltip": { backgroundColor: "var(--th-surface)", color: "var(--th-fg)", border: "1px solid var(--th-border)" },
   ".cm-tooltip-autocomplete ul li[aria-selected]": { backgroundColor: "var(--th-hover)", color: "var(--th-fg)" },
-  ".cm-panels": { backgroundColor: "var(--th-surface)", color: "var(--th-fg)", borderColor: "var(--th-border)" },
-  ".cm-panel input, .cm-panel button": { fontSize: "11px" },
+  // Find / replace panel — CodeMirror's defaults are light-only gradients
+  ".cm-panels": { backgroundColor: "var(--th-surface)", color: "var(--th-fg)" },
+  ".cm-panels-top": { borderBottom: "1px solid var(--th-border)" },
+  ".cm-panel.cm-search": { padding: "4px 8px", fontSize: "11px" },
+  ".cm-textfield": {
+    backgroundColor: "var(--th-input)", color: "var(--th-fg)", border: "1px solid var(--th-input-border)",
+    borderRadius: "3px", padding: "2px 6px", fontSize: "11px", fontFamily: "inherit",
+  },
+  ".cm-textfield:focus": { outline: "none", borderColor: "#3b82f6", boxShadow: "0 0 0 1px #3b82f6" },
+  ".cm-button": {
+    backgroundImage: "none", backgroundColor: "var(--th-hover)", color: "var(--th-fg-2)",
+    border: "1px solid var(--th-border-muted)", borderRadius: "3px", padding: "2px 8px", fontSize: "11px", textTransform: "none",
+  },
+  ".cm-button:hover": { backgroundColor: "var(--th-border-muted)", color: "var(--th-fg)" },
+  ".cm-button:active": { backgroundImage: "none", backgroundColor: "var(--th-border)" },
+  ".cm-panel.cm-search label": { color: "var(--th-fg-3)", fontSize: "11px" },
+  ".cm-panel.cm-search input[type=checkbox]": { accentColor: "#3b82f6", marginRight: "3px" },
+  ".cm-panel.cm-search [name=close]": { color: "var(--th-fg-3)", fontSize: "16px", cursor: "pointer" },
+  ".cm-panel.cm-search [name=close]:hover": { color: "var(--th-fg)" },
+  ".cm-searchMatch": { backgroundColor: "color-mix(in srgb, #f59e0b 28%, transparent)", outline: "1px solid color-mix(in srgb, #f59e0b 55%, transparent)" },
+  ".cm-searchMatch.cm-searchMatch-selected": { backgroundColor: "color-mix(in srgb, #f59e0b 55%, transparent)" },
+  ".cm-selectionMatch": { backgroundColor: "color-mix(in srgb, #3b82f6 18%, transparent)" },
+  // Lint tooltips and the gutter
+  ".cm-tooltip-lint": { backgroundColor: "var(--th-surface)", color: "var(--th-fg-2)" },
+  ".cm-diagnostic": { padding: "3px 6px" },
+  ".cm-diagnostic-error": { borderLeftColor: "#ef4444" },
   ".cm-diagnostic-info": { borderLeftColor: "var(--syn-prefix)" },
 });
 

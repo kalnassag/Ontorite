@@ -58,7 +58,7 @@ export default function ImportsEditor({ imports, prefixes, onChange }: Props) {
           <Plus size={12} />
         </button>
       </div>
-      {error && <p className="text-2xs text-red-400">{error}</p>}
+      {error && <p className="text-2xs text-red-600 dark:text-red-400">{error}</p>}
     </div>
   );
 }

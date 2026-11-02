@@ -22,17 +22,17 @@ export default function ValidationPanel({ issues, onClose }: Props) {
           <span className="text-2xs font-semibold text-th-fg-2">
             Validation
             {errors.length > 0 && (
-              <span className="ml-1.5 rounded bg-red-900/50 px-1 py-0.5 text-red-300">
+              <span className="ml-1.5 rounded bg-red-100 px-1 py-0.5 text-red-700 dark:bg-red-900/50 dark:text-red-300">
                 {errors.length} error{errors.length > 1 ? "s" : ""}
               </span>
             )}
             {warnings.length > 0 && (
-              <span className="ml-1 rounded bg-amber-900/50 px-1 py-0.5 text-amber-300">
+              <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
                 {warnings.length} warning{warnings.length > 1 ? "s" : ""}
               </span>
             )}
             {issues.length === 0 && (
-              <span className="ml-1.5 text-green-400">All clear</span>
+              <span className="ml-1.5 text-emerald-600 dark:text-emerald-400">All clear</span>
             )}
           </span>
           <button
@@ -49,13 +49,13 @@ export default function ValidationPanel({ issues, onClose }: Props) {
             {issues.map((issue, i) => (
               <li key={i} className="flex items-start gap-1.5">
                 {issue.severity === "error" ? (
-                  <AlertCircle size={12} className="mt-0.5 flex-shrink-0 text-red-400" />
+                  <AlertCircle size={12} className="mt-0.5 flex-shrink-0 text-red-600 dark:text-red-400" />
                 ) : (
-                  <AlertTriangle size={12} className="mt-0.5 flex-shrink-0 text-amber-400" />
+                  <AlertTriangle size={12} className="mt-0.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
                 )}
                 <span
                   className={`text-2xs ${
-                    issue.severity === "error" ? "text-red-300" : "text-amber-300/90"
+                    issue.severity === "error" ? "text-red-700 dark:text-red-300" : "text-amber-800 dark:text-amber-300"
                   }`}
                 >
                   <span className="font-medium capitalize">{issue.entityType}</span>

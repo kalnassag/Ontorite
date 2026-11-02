@@ -69,7 +69,7 @@ export default function CreateEntityDialog({ classes, baseUri, onConfirm, onCanc
           {/* Label */}
           <div>
             <label className="mb-1 block text-xs font-medium text-th-fg-2">
-              Label <span className="text-red-400">*</span>
+              Label <span className="text-red-600 dark:text-red-400">*</span>
             </label>
             <input
               ref={labelRef}
@@ -84,7 +84,7 @@ export default function CreateEntityDialog({ classes, baseUri, onConfirm, onCanc
           {/* Class picker */}
           <div>
             <label className="mb-1 block text-xs font-medium text-th-fg-2">
-              Class <span className="text-red-400">*</span>
+              Class <span className="text-red-600 dark:text-red-400">*</span>
             </label>
             {classes.length === 0 ? (
               <p className="text-xs text-th-fg-4">

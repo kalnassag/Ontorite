@@ -12,7 +12,14 @@ type FileKeys = "lastFileSaveTime" | "fileSaveInProgress" | "exportTurtle" | "ex
 
 const fileNameFor = (label: string | undefined) => `${(label || "ontology").toLowerCase().replace(/\s+/g, "-")}.ttl`;
 
-export const fileSlice: Slice<FileKeys> = (set, get) => ({
+export const fileSlice: Slice<FileKeys> = (set, get, { persist }) => {
+  /** Remember which file an ontology now lives in (not an undoable edit). */
+  const recordFileName = (id: string, fileName: string) => {
+    set((s) => ({ ontologies: s.ontologies.map((o) => (o.id === id ? { ...o, fileName } : o)) }));
+    persist(id);
+  };
+
+  return {
   lastFileSaveTime: null,
   fileSaveInProgress: false,
 
@@ -43,6 +50,7 @@ export const fileSlice: Slice<FileKeys> = (set, get) => ({
       const handle = await saveAsTurtleFile(turtle, fileNameFor(onto.metadata.ontologyLabel));
       if (!handle) return false;
       setHandle(onto.id, handle);
+      recordFileName(onto.id, handle.name);
       set({ lastFileSaveTime: Date.now() });
       return true;
     }
@@ -54,6 +62,8 @@ export const fileSlice: Slice<FileKeys> = (set, get) => ({
     a.download = fileNameFor(onto.metadata.ontologyLabel);
     a.click();
     URL.revokeObjectURL(url);
+    recordFileName(onto.id, a.download);
     return true;
   },
-});
+  };
+};

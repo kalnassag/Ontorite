@@ -45,7 +45,7 @@ export default class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex h-screen flex-col items-center justify-center gap-4 bg-th-base px-8 text-center">
           <h1 className="text-lg font-semibold text-th-fg">Something went wrong.</h1>
-          <pre className="max-w-xl overflow-auto rounded border border-th-border bg-th-surface px-4 py-3 text-left font-mono text-xs text-red-400">
+          <pre className="max-w-xl overflow-auto rounded border border-th-border bg-th-surface px-4 py-3 text-left font-mono text-xs text-red-600 dark:text-red-400">
             {this.state.error?.message}
           </pre>
           <button

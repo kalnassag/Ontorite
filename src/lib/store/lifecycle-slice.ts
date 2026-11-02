@@ -118,7 +118,7 @@ export const lifecycleSlice: Slice<LifecycleKeys> = (set, get, { commit, persist
       return onto.id;
     },
 
-    importOntology: (turtleText, fileName) => get()._addImported(parseTurtle(turtleText), fileName),
+    importOntology: (turtleText, fileName, opts) => get()._addImported(parseTurtle(turtleText), fileName, opts),
 
     importOntologyAsync: async (text, fileName) => {
       const format = detectFormat(fileName, text);
@@ -133,7 +133,7 @@ export const lifecycleSlice: Slice<LifecycleKeys> = (set, get, { commit, persist
       return id;
     },
 
-    _addImported: (parsed, fileName) => {
+    _addImported: (parsed, fileName, opts) => {
       // Strict: a file with a syntax error is rejected rather than half-imported
       // (a partial import linked to a file handle would be auto-saved over the original).
       if (parsed.errors.length > 0 && parsed.triples.length === 0) {
@@ -153,6 +153,7 @@ export const lifecycleSlice: Slice<LifecycleKeys> = (set, get, { commit, persist
         properties: model.properties,
         individuals: model.individuals,
         unmappedTriples: model.unmappedTriples,
+        fileName: opts?.recordFileName === false ? undefined : fileName,
         createdAt: now,
         updatedAt: now,
       };

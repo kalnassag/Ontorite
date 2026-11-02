@@ -343,7 +343,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
               }))}
             placeholder={domainUris.length === 0 ? "Pick a domain class (type to search)…" : "+ Add another class (creates a union)…"}
           />
-          {refs.errorFor("domain") && <p className="text-2xs text-red-400">{refs.errorFor("domain")}</p>}
+          {refs.errorFor("domain") && <p className="text-2xs text-red-600 dark:text-red-400">{refs.errorFor("domain")}</p>}
         </div>
       </div>
 
@@ -456,7 +456,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
         )}
       </div>
 
-      {refs.errorFor("range") && <p className="-mt-2 text-2xs text-red-400">{refs.errorFor("range")}</p>}
+      {refs.errorFor("range") && <p className="-mt-2 text-2xs text-red-600 dark:text-red-400">{refs.errorFor("range")}</p>}
 
       {/* subPropertyOf */}
       {sameTypeProps.length > 0 && (

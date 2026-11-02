@@ -54,6 +54,8 @@ Protégé, WebVOWL, and PoolParty all display properties as a flat list disconne
 
 ### Usability
 - **Dark and light mode** — persisted per device
+- **Resizable panes** — drag the edge of the ontology list or class browser (double-click to reset); widths are remembered
+- **File awareness** — the file an ontology was imported from or saved to is shown under its title and in the sidebar, with a dot showing whether saves write back to it
 - **Persists across sessions** — everything is saved to IndexedDB automatically; no cloud required
 - **Keyboard shortcuts** — `Ctrl+N` new class, `Ctrl+Shift+N` new property on the selected class, `Ctrl+Z` undo, `Ctrl+Y` redo, `Ctrl+V` paste, `Ctrl+S` save; in the Source view `Ctrl+Enter` apply, `Ctrl+S` apply and save
 
