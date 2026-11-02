@@ -24,7 +24,7 @@ teaching tool or a toy. Assume the user understands OWL 2, RDF, RDFS, SKOS, and 
 - **Turtle serialization:** Custom serializer in `src/lib/turtle-serializer.ts`
   (the readable output is a feature). Other export formats go Turtle → N3 → target.
 - **Graphs:** `d3-force` (layout only; rendering is React SVG)
-- **Animation:** framer-motion (cards, drawers)
+- **Animation:** CSS keyframes in `tailwind.config.js` (no animation library; respect `motion-reduce`)
 - **Icons:** Lucide React
 - **Tests:** Vitest (`npm test`), including an RDF-isomorphism round-trip suite
 - **No backend.** Fully client-side. `server/index.js` (Express) only serves the built
