@@ -37,11 +37,19 @@ teaching tool or a toy. Assume the user understands OWL 2, RDF, RDFS, SKOS, and 
 **Ontology** — a named, versioned container. Has:
 - Base URI (namespace)
 - Prefix map (prefix → URI)
-- owl:Ontology metadata (label, comment, versionIRI, versionInfo, editorial notes)
-- Classes, Properties, Individuals, and `unmappedTriples` (preserved raw triples)
+- owl:Ontology metadata (label, comment, versionIRI, versionInfo, `imports`
+  (`owl:imports`), editorial notes, and `extraTriples` for other header statements)
+- Classes, Properties, Individuals, and `unmappedTriples` ("Other statements")
 
 All entities carry `editorialNotes` (`skos:editorialNote`), `created` / `modified`
-(`dcterms:`), and `extraTriples` for anything without a typed field.
+(`dcterms:`), and `extraTriples` for anything without a typed field. An extra
+triple whose object is a blank node **owns** that structure in `blankNodeTriples`
+(the restriction, intersection, list… it points at), so it moves, copies, renames
+and deletes with its entity.
+
+`unmappedTriples` holds only statements with no entity to belong to: untyped or
+external subjects, top-level blank-node axioms (`[] a owl:AllDisjointClasses`), and
+blank nodes shared by more than one statement.
 
 **Class** (`owl:Class`) — Has:
 - URI (derived from base URI + local name)
@@ -90,7 +98,14 @@ Each property has:
      min/max/exact cardinality)
    They are consumed only when the shape *and* references match exactly. Everything
    else (intersections, qualified cardinalities, property chains, oneOf, …) is kept
-   verbatim as raw triples and re-serialized inline.
+   verbatim as raw triples owned by the statement that references it, shown on the
+   entity's card as the exact Turtle that's exported, and edited as a Turtle snippet
+   (parsed with N3; a structure is always replaced whole, never half-edited).
+
+6. **Imports are recorded, not loaded.** `owl:imports` is edited in the metadata
+   drawer and exported as full IRIs, but imported ontologies aren't fetched.
+   Validation therefore only reports unknown references inside the ontology's own
+   namespace; terms from other namespaces are assumed to be imported/external.
 
 5. **Property cardinality is OWL restrictions on the wire.** `min/max/exactCardinality`
    on a property serialize as a restriction on each domain class (`owl:Thing` if
@@ -106,15 +121,20 @@ src/
     layout/   App (root layout + shortcuts), OntologyList (sidebar), ClassBrowserPanel,
               Drawer, Toast, KeyboardHelp, ErrorBoundary
     core/     ClassCard, PropertyRow, IndividualCard, UnassignedProperties,
-              UnmappedTriplesTable (preserved triples), ClassHierarchyTree,
+              TurtleStatementList (an entity's "Other axioms" as Turtle),
+              OtherStatements (subject-less statements), ClassHierarchyTree,
               ValidationPanel, OntologyDiff, ImportExport, TimestampFooter
-    forms/    ClassForm, PropertyForm, LabelEditor, ExtraTripleEditor, VocabAutocomplete
+    forms/    ClassForm, PropertyForm, LabelEditor, ExtraTripleEditor, ImportsEditor,
+              CharacteristicsEditor, VocabAutocomplete
     dialogs/  OntologyMetadataDrawer, EditorialNotesDrawer, CreateEntityDialog, CreateEdgeDialog
     graph/    OntologyGraph (force), TreeGraph (hierarchy), EntityGraph (neighbourhood)
   lib/
     turtle-parser.ts      Turtle/N-Triples → ParsedTriple[] (N3.js adapter, strict)
     model-builder.ts      ParsedTriple[] → domain model (see decision 4)
     turtle-serializer.ts  domain model → Turtle
+    turtle-format.ts      shared Turtle rendering (serializer + UI show identical text)
+    turtle-snippets.ts    parse user-typed Turtle (predicate lists, statements)
+    raw-triples.ts        blank-node ownership, routing, renaming, relabelling
     formats/              JSON-LD / RDF/XML / N-Triples adapters (lazy-loaded)
     store.ts              Zustand store, composed from store/*-slice.ts
     store/                internals.ts (commit: undo + persistence), migrations.ts, slices
@@ -239,7 +259,8 @@ The serializer in `src/lib/turtle-serializer.ts` must produce:
 - Properly formatted `@prefix` declarations
 - `owl:Ontology` declaration block
 - Sections: Classes, Object / Datatype / Annotation Properties, Property cardinalities
-  (for properties with no local domain class), Individuals, Preserved triples
+  (for properties with no local domain class), Individuals, Other statements
+- `owl:imports` as full IRIs in the `owl:Ontology` block
 - Predicate-object lists (`;`), objects of the same predicate grouped with `,`
 - Language-tagged and datatype literals; `1`, `2.5`, `true` shorthand where lossless
 - Prefixed names only when the local part is a valid `PN_LOCAL` (`compact()` handles
@@ -278,9 +299,11 @@ The serializer in `src/lib/turtle-serializer.ts` must produce:
 2. **Don't confuse URI with local name.** The URI is `{baseURI}{localName}`.
    Display the local name in the UI; use the full URI in serialization.
 3. **Don't lose unrecognised triples on round-trip.** Triples the model can't
-   represent exactly go to the subject entity's `extraTriples`, or to
-   `unmappedTriples` when the subject isn't an entity, and are re-serialized verbatim.
-   The round-trip test suite enforces this.
+   represent exactly go to the subject entity's `extraTriples` (the ontology's own
+   for header statements), or to `unmappedTriples` when the subject isn't an entity,
+   and are re-serialized verbatim. The round-trip test suite enforces this. Use the
+   helpers in `raw-triples.ts` (`addRawTriples`, `freshenExtras`,
+   `renameIriInRawTriples`) rather than editing those arrays by hand.
 4. **Don't auto-assign language tags.** PoolParty's blanket `@en` tagging is
    a known antipattern. Only tag with a language when the user explicitly sets one.
 5. **Prefix collisions.** When importing, merge prefixes with existing ones.

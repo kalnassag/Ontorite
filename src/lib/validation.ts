@@ -24,6 +24,12 @@ export function validate(ontology: Ontology): ValidationIssue[] {
   const classUris = new Set(ontology.classes.map((c) => c.uri));
   const propUris = new Set(ontology.properties.map((p) => p.uri));
   const allUris = new Map<string, string>(); // uri → entityId for duplicate detection
+  // Only references into this ontology's own namespace can be "unknown": terms
+  // from other namespaces are assumed to come from an owl:imports or an
+  // external vocabulary, which Ontorite doesn't load.
+  const baseUri = ontology.metadata.baseUri;
+  const missingClass = (uri: string) => !classUris.has(uri) && !!baseUri && uri.startsWith(baseUri);
+  const missingProperty = (uri: string) => !propUris.has(uri) && !!baseUri && uri.startsWith(baseUri);
 
   // Ontology-level
   if (!ontology.metadata.baseUri) {
@@ -60,7 +66,7 @@ export function validate(ontology: Ontology): ValidationIssue[] {
     allUris.set(cls.uri, cls.id);
 
     for (const parentUri of cls.subClassOf) {
-      if (!classUris.has(parentUri)) {
+      if (missingClass(parentUri)) {
         issues.push({
           severity: "warning",
           entityId: cls.id,
@@ -107,7 +113,7 @@ export function validate(ontology: Ontology): ValidationIssue[] {
         field: "domain",
       });
     } else {
-      const unknownMembers = domains.filter((u) => !classUris.has(u));
+      const unknownMembers = domains.filter(missingClass);
       if (unknownMembers.length > 0) {
         issues.push({
           severity: "error",
@@ -123,7 +129,7 @@ export function validate(ontology: Ontology): ValidationIssue[] {
       for (const r of prop.ranges ?? []) {
         const rUris = r.kind === "class" ? [r.uri] : r.uris;
         for (const ru of rUris) {
-          if (!classUris.has(ru)) {
+          if (missingClass(ru)) {
             issues.push({
               severity: "warning",
               entityId: prop.id,
@@ -164,7 +170,7 @@ export function validate(ontology: Ontology): ValidationIssue[] {
     }
     allUris.set(prop.uri, prop.id);
 
-    if (prop.inverseOf && !propUris.has(prop.inverseOf)) {
+    if (prop.inverseOf && missingProperty(prop.inverseOf)) {
       issues.push({
         severity: "warning",
         entityId: prop.id,

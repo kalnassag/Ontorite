@@ -14,7 +14,7 @@ Protégé, WebVOWL, and PoolParty all display properties as a flat list disconne
 - **Create ontologies from scratch** — set a base URI, manage prefix mappings, add multilingual labels and descriptions
 - **Import + export in four formats** — Turtle (`.ttl`), JSON-LD (`.jsonld`), RDF/XML (`.rdf` / `.owl`), and N-Triples (`.nt`). Import format is auto-detected by extension with content sniffing as fallback; export picks via dropdown
 - **Lossless round-trip** — import → export yields the same RDF graph (checked by an isomorphism test suite). Constructs Ontorite doesn't model — intersections, qualified cardinalities, property chains, `owl:oneOf` — are preserved verbatim, never dropped
-- **Clean, conventional Turtle output** — proper `@prefix` declarations, grouped sections (Classes / Object / Datatype / Annotation Properties / Individuals / Preserved triples), objects grouped with `,`, single-use blank nodes written inline as `[ … ]` and `( … )`
+- **Clean, conventional Turtle output** — proper `@prefix` declarations, grouped sections (Classes / Object / Datatype / Annotation Properties / Individuals / Other statements), objects grouped with `,`, single-use blank nodes written inline as `[ … ]` and `( … )`
 - **Properties nested under their domain class** — Object, Datatype, and Annotation properties colour-coded (blue / green / amber) and grouped beneath each class card
 - **Unassigned properties bucket** — properties without a domain are surfaced separately, never silently lost; drag one onto a class card to assign its domain
 - **Property characteristics** — Functional, Inverse functional, Transitive, Symmetric, Asymmetric, Reflexive and Irreflexive as checkboxes, shown as compact badges on each property row
@@ -33,7 +33,8 @@ Protégé, WebVOWL, and PoolParty all display properties as a flat list disconne
 - **Editorial notes** — multilingual `skos:editorialNote` on every class, property, individual, and on the ontology itself. Edit in a right-side drawer; entities with notes show a persistent amber indicator
 - **Ontology version metadata** — `owl:versionIRI` and `owl:versionInfo` are parsed, edited in the metadata drawer, and round-trip cleanly. `versionInfo` shows as a small `vX.Y.Z` badge next to the ontology name in the top bar and sidebar
 - **Automatic timestamps** — every class, property, individual, and ontology gets `dcterms:created` stamped on add and `dcterms:modified` re-stamped on every edit. Hover any entity for "Modified 3h ago · Created 5d ago"
-- **Preserved triples table** — unmapped triples kept on import (anything the model doesn't have a typed field for) are surfaced in an editable table at the bottom of the workspace. Edit subject/predicate/object inline, toggle URI/literal, delete, or promote into an entity's `extraTriples`
+- **Nothing is hidden or lost** — OWL that Ontorite doesn't model with forms (qualified cardinalities, intersections, `owl:oneOf`, property chains…) appears on its class or property card as *Other axioms*, written as the exact Turtle that's exported and editable as Turtle. Statements about subjects that aren't entities of the ontology sit in an *Other statements* panel, grouped by subject, where an untyped subject can be declared as a class or property in one click
+- **`owl:imports` and header annotations** — imports, `dcterms:license`, `dcterms:creator` and any other statements about the ontology are edited in the metadata drawer and kept in the `owl:Ontology` block
 
 ### Visualisation
 - **Ontology graph** — D3 force-directed graph of all classes, properties, and their relationships. Self-referencing properties (e.g. `:Person :managerOf :Person`) render as a looped arc
@@ -89,7 +90,7 @@ Protégé, WebVOWL, and PoolParty all display properties as a flat list disconne
 **Importing an existing ontology**
 1. Click **Import** in the sidebar and pick a file — Turtle, JSON-LD, RDF/XML, or N-Triples. The format is auto-detected from the extension (with content sniffing as fallback)
 2. The ontology loads; classes appear with their properties already nested
-3. Any properties without a domain appear in the **Unassigned properties** section at the bottom; any triples without a typed mapping appear in the **Preserved triples** table below it for inline editing
+3. Any properties without a domain appear in the **Unassigned properties** section at the bottom; OWL without a form (e.g. qualified cardinalities) shows on its card as *Other axioms*, and statements about non-entities appear in the **Other statements** panel below
 
 <!-- screenshot: imported ontology with nested properties -->
 

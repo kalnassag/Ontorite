@@ -3,10 +3,15 @@
  * Every action goes through `commit`, which handles undo + persistence.
  */
 
-import type { ClassExpression, ExtraTriple, Individual, OntologyClass, OntologyProperty } from "../../types";
+import type { ClassExpression, Individual, OntologyClass, OntologyProperty, PropertyType, UnmappedTriple } from "../../types";
 import { classExprReplace, classExprRemove } from "../../types";
 import { buildUri, toPascalCase, toCamelCase } from "../uri-utils";
 import { genId, nowIso } from "./ids";
+import { addRawTriples, renameIriInRawTriples } from "../raw-triples";
+import { buildModelFromTriples } from "../model-builder";
+import { OWL, RDF, isBlankNode } from "../vocab";
+
+const expandOwl = (type: PropertyType) => OWL[type.slice(4) as "ObjectProperty" | "DatatypeProperty" | "AnnotationProperty"];
 import type { Slice } from "./types";
 
 type EntityKeys =
@@ -14,7 +19,7 @@ type EntityKeys =
   | "addProperty" | "updateProperty" | "deleteProperty"
   | "addIndividual" | "updateIndividual" | "deleteIndividual"
   | "updateIndividualProperty" | "addIndividualProperty" | "removeIndividualProperty"
-  | "updateUnmappedTriple" | "deleteUnmappedTriple" | "promoteUnmappedTriple";
+  | "replaceOtherStatements" | "declareEntity";
 
 const renameIn = (uris: string[], oldUri: string, newUri: string) => uris.map((u) => (u === oldUri ? newUri : u));
 const EMPTY_DOMAIN: ClassExpression = { kind: "class", uri: "" };
@@ -58,14 +63,15 @@ export const entitySlice: Slice<EntityKeys> = (_set, get, { commit }) => {
         const oldUri = o.classes.find((c) => c.id === id)?.uri;
         const newUri = patch.uri ?? oldUri;
         const renamed = !!oldUri && !!newUri && oldUri !== newUri;
+        const base = renamed ? renameIriInRawTriples(o, oldUri, newUri) : o;
         return {
-          ...o,
-          classes: o.classes.map((c) => {
+          ...base,
+          classes: base.classes.map((c) => {
             if (c.id === id) return { ...c, ...patch, modified: patch.modified ?? stamp };
             if (!renamed) return c;
             return { ...c, subClassOf: renameIn(c.subClassOf, oldUri, newUri), disjointWith: renameIn(c.disjointWith, oldUri, newUri) };
           }),
-          properties: !renamed ? o.properties : o.properties.map((p) => ({
+          properties: !renamed ? base.properties : base.properties.map((p) => ({
             ...p,
             domain: classExprReplace(p.domain, oldUri, newUri),
             ranges: p.ranges.map((r) => classExprReplace(r, oldUri, newUri)),
@@ -134,9 +140,10 @@ export const entitySlice: Slice<EntityKeys> = (_set, get, { commit }) => {
         const oldUri = o.properties.find((p) => p.id === id)?.uri;
         const newUri = patch.uri ?? oldUri;
         const renamed = !!oldUri && !!newUri && oldUri !== newUri;
+        const base = renamed ? renameIriInRawTriples(o, oldUri, newUri) : o;
         return {
-          ...o,
-          properties: o.properties.map((p) => {
+          ...base,
+          properties: base.properties.map((p) => {
             if (p.id === id) return { ...p, ...patch, modified: patch.modified ?? stamp };
             if (!renamed) return p;
             return {
@@ -146,7 +153,7 @@ export const entitySlice: Slice<EntityKeys> = (_set, get, { commit }) => {
             };
           }),
           // Restrictions reference properties by URI too
-          classes: !renamed ? o.classes : o.classes.map((c) =>
+          classes: !renamed ? base.classes : base.classes.map((c) =>
             c.restrictions.some((r) => r.propertyUri === oldUri)
               ? { ...c, restrictions: c.restrictions.map((r) => (r.propertyUri === oldUri ? { ...r, propertyUri: newUri } : r)) }
               : c),
@@ -198,9 +205,10 @@ export const entitySlice: Slice<EntityKeys> = (_set, get, { commit }) => {
         const oldUri = o.individuals.find((i) => i.id === id)?.uri;
         const newUri = patch.uri ?? oldUri;
         const renamed = !!oldUri && !!newUri && oldUri !== newUri;
+        const base = renamed ? renameIriInRawTriples(o, oldUri, newUri) : o;
         return {
-          ...o,
-          individuals: o.individuals.map((ind) => {
+          ...base,
+          individuals: base.individuals.map((ind) => {
             if (ind.id === id) return { ...ind, ...patch, modified: patch.modified ?? stamp };
             if (!renamed) return ind;
             // Cascade the rename into other individuals' object-property values
@@ -227,34 +235,38 @@ export const entitySlice: Slice<EntityKeys> = (_set, get, { commit }) => {
     removeIndividualProperty: (individualId, index) =>
       mapIndividual(individualId, (ind) => ({ ...ind, propertyValues: ind.propertyValues.filter((_, i) => i !== index) })),
 
-    // ── Preserved (unmapped) triples ─────────────────────────────────────
-    updateUnmappedTriple: (index, patch) =>
-      commit((o) => ({ ...o, unmappedTriples: o.unmappedTriples.map((t, i) => (i === index ? { ...t, ...patch } : t)) })),
-
-    deleteUnmappedTriple: (index) =>
-      commit((o) => ({ ...o, unmappedTriples: o.unmappedTriples.filter((_, i) => i !== index) })),
-
-    promoteUnmappedTriple: (index, targetEntityId) =>
+    // ── Other statements (raw triples) ───────────────────────────────────
+    replaceOtherStatements: (oldTriples, newTriples) =>
       commit((o) => {
-        const t = o.unmappedTriples[index];
-        if (!t) return o;
-        const extra: ExtraTriple = { predicate: t.predicate, object: t.object, isLiteral: t.isLiteral, lang: t.lang, datatype: t.datatype };
-        const unmappedTriples = o.unmappedTriples.filter((_, i) => i !== index);
-        if (o.classes.some((c) => c.id === targetEntityId)) {
-          return {
-            ...o,
-            unmappedTriples,
-            classes: o.classes.map((c) => (c.id === targetEntityId ? { ...c, extraTriples: [...c.extraTriples, extra] } : c)),
-          };
-        }
-        if (o.properties.some((p) => p.id === targetEntityId)) {
-          return {
-            ...o,
-            unmappedTriples,
-            properties: o.properties.map((p) => (p.id === targetEntityId ? { ...p, extraTriples: [...p.extraTriples, extra] } : p)),
-          };
-        }
-        return o;
+        const remove = new Set(oldTriples);
+        return addRawTriples({ ...o, unmappedTriples: o.unmappedTriples.filter((t) => !remove.has(t)) }, newTriples);
       }),
+
+    declareEntity: (subject, statements, kind) => {
+      const onto = get().getActiveOntology();
+      if (!onto || isBlankNode(subject)) return null;
+      // Let the model builder map labels, comments, domains… exactly as on import
+      const typeIri = kind === "class" ? OWL.Class : expandOwl(kind);
+      const toParsed = (t: UnmappedTriple) => ({ s: t.subject, p: t.predicate, o: t.object, isLiteral: t.isLiteral, lang: t.lang, datatype: t.datatype });
+      const model = buildModelFromTriples({
+        prefixes: onto.metadata.prefixes, baseUri: onto.metadata.baseUri, errors: [],
+        triples: [{ s: subject, p: RDF.type, o: typeIri, isLiteral: false }, ...statements.map(toParsed)],
+      });
+      const now = nowIso();
+      const cls = model.classes.find((c) => c.uri === subject);
+      const prop = model.properties.find((p) => p.uri === subject);
+      const entity = cls ?? prop;
+      if (!entity) return null;
+      const remove = new Set(statements);
+      commit((o) => {
+        const unmappedTriples = o.unmappedTriples.filter((t) => !remove.has(t));
+        // Anything the builder couldn't place (e.g. a shared blank node) stays put
+        const next = { ...o, unmappedTriples: [...unmappedTriples, ...model.unmappedTriples] };
+        return cls
+          ? { ...next, classes: [...next.classes, { ...cls, created: now, modified: now }] }
+          : { ...next, properties: [...next.properties, { ...prop!, created: now, modified: now }] };
+      });
+      return entity.id;
+    },
   };
 };

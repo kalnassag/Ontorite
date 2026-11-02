@@ -63,6 +63,7 @@ export const OWL = {
   cardinality: NS.owl + "cardinality",
   versionIRI: NS.owl + "versionIRI",
   versionInfo: NS.owl + "versionInfo",
+  imports: NS.owl + "imports",
 } as const;
 
 export const XSD = {

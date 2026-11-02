@@ -9,7 +9,7 @@ import OntologyList from "./OntologyList";
 import ClassCard from "../core/ClassCard";
 import ClassForm from "../forms/ClassForm";
 import UnassignedProperties from "../core/UnassignedProperties";
-import UnmappedTriplesTable from "../core/UnmappedTriplesTable";
+import OtherStatements from "../core/OtherStatements";
 import ImportExport from "../core/ImportExport";
 import IndividualCard from "../core/IndividualCard";
 import ValidationPanel from "../core/ValidationPanel";
@@ -99,7 +99,7 @@ export default function App() {
 
   // U8: Ref for scrolling to unassigned properties
   const unassignedRef = useRef<HTMLDivElement>(null);
-  const unmappedRef = useRef<HTMLDivElement>(null);
+  const otherStatementsRef = useRef<HTMLDivElement>(null);
 
   const toggleClassBrowser = useCallback(() => {
     setClassBrowserCollapsed((prev) => {
@@ -214,6 +214,14 @@ export default function App() {
     () => (activeOntology ? validate(activeOntology) : []),
     [activeOntology]
   );
+
+  // One per subject block in the Other statements panel (blank nodes nested in
+  // another statement don't get their own block)
+  const otherStatementCount = useMemo(() => {
+    const triples = activeOntology?.unmappedTriples ?? [];
+    const referenced = new Set(triples.filter((t) => !t.isLiteral).map((t) => t.object));
+    return new Set(triples.filter((t) => !t.subject.startsWith("_:") || !referenced.has(t.subject)).map((t) => t.subject)).size;
+  }, [activeOntology?.unmappedTriples]);
 
   const unassignedCount = useMemo(
     () => (activeOntology ? unassignedProperties(activeOntology).length : 0),
@@ -622,15 +630,15 @@ export default function App() {
                         {individuals.length} individuals
                       </span>
                     )}
-                    {activeOntology.unmappedTriples.length > 0 && (
+                    {otherStatementCount > 0 && (
                       <button
                         onClick={() =>
-                          unmappedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+                          otherStatementsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
                         }
-                        className="rounded text-amber-500 hover:text-amber-400 hover:underline"
-                        title="Scroll to the unmapped-triples table"
+                        className="rounded hover:text-th-fg-2 hover:underline"
+                        title="Statements about subjects that aren't entities of this ontology"
                       >
-                        {activeOntology.unmappedTriples.length} unmapped triples →
+                        {otherStatementCount} other statement{otherStatementCount === 1 ? "" : "s"} →
                       </button>
                     )}
                   </div>
@@ -676,7 +684,7 @@ export default function App() {
                   <div ref={unassignedRef}>
                     <UnassignedProperties />
                   </div>
-                  <UnmappedTriplesTable ref={unmappedRef} />
+                  <OtherStatements ref={otherStatementsRef} />
                 </div>
               </div>
             )}

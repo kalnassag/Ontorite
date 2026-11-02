@@ -2,7 +2,7 @@
  * Serializes an Ontology to valid, human-readable Turtle.
  *
  * Layout: prefixes → owl:Ontology header → Classes → Object / Datatype /
- * Annotation Properties → Individuals → Preserved triples. Every resource is
+ * Annotation Properties → Individuals → Other statements. Every resource is
  * one block using `;` continuation lines indented by four spaces.
  */
 
@@ -10,10 +10,12 @@ import type {
   Ontology, OntologyClass, OntologyProperty, LangString, Individual, ClassExpression,
   OntologyRestriction, ExtraTriple,
 } from "../types";
-import { compact, STANDARD_PREFIXES } from "./uri-utils";
-import { OWL, RDF, XSD, isBlankNode } from "./vocab";
-
-type Pair = [predicate: string, object: string];
+import { STANDARD_PREFIXES, iriRef } from "./uri-utils";
+import { OWL, isBlankNode } from "./vocab";
+import { allRawTriples, countReferences } from "./raw-triples";
+import {
+  type Pair, createNodeRenderer, createTermFormatter, escLit, formatBlock, formatLiteral, statementGroups,
+} from "./turtle-format";
 
 const RESTRICTION_PREDICATE: Record<OntologyRestriction["type"], string> = {
   someValuesFrom: "owl:someValuesFrom",
@@ -23,68 +25,23 @@ const RESTRICTION_PREDICATE: Record<OntologyRestriction["type"], string> = {
   maxCardinality: "owl:maxCardinality",
   exactCardinality: "owl:cardinality",
 };
-/** Datatypes with a Turtle shorthand form, and the lexical forms that round-trip exactly. */
-const SHORTHAND_LITERAL: Record<string, RegExp> = {
-  [XSD.integer]: /^[+-]?\d+$/,
-  [XSD.decimal]: /^[+-]?\d*\.\d+$/,
-  [XSD.boolean]: /^(true|false)$/,
-};
 const COUNT_RESTRICTIONS = new Set<OntologyRestriction["type"]>(["minCardinality", "maxCardinality", "exactCardinality"]);
-
-const escLit = (value: string): string =>
-  value
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, "\\n")
-    .replace(/\r/g, "\\r")
-    .replace(/\t/g, "\\t");
 
 export function serializeToTurtle(ontology: Ontology): string {
   const lines: string[] = [];
   const prefixes = { ...STANDARD_PREFIXES, ...ontology.metadata.prefixes };
-  // Blank nodes are renumbered in order of first appearance in the output, so
-  // exporting the same graph always yields the same text.
-  const bnodeLabels = new Map<string, string>();
-  const c = (uri: string): string => {
-    if (!isBlankNode(uri)) return compact(uri, prefixes);
-    let label = bnodeLabels.get(uri);
-    if (!label) bnodeLabels.set(uri, (label = `_:b${bnodeLabels.size}`));
-    return label;
-  };
-
+  // Blank nodes are renumbered in order of first appearance, so exporting the
+  // same graph always yields the same text. Single-use blank nodes (owned
+  // structures, lists) are written inline — see turtle-format.ts.
+  const c = createTermFormatter(prefixes);
   const langLit = (ls: LangString): string =>
     ls.lang ? `"${escLit(ls.value)}"@${ls.lang}` : `"${escLit(ls.value)}"`;
-  const typedLit = (value: string, datatype?: string, lang?: string): string => {
-    if (lang) return `"${escLit(value)}"@${lang}`;
-    const shorthand = datatype ? SHORTHAND_LITERAL[datatype] : undefined;
-    if (shorthand?.test(value)) return value;
-    if (datatype) return `"${escLit(value)}"^^${c(datatype)}`;
-    return `"${escLit(value)}"`;
-  };
+  const typedLit = (value: string, datatype?: string, lang?: string) => formatLiteral(value, datatype, lang, c);
   const dateTime = (value: string) => `"${escLit(value)}"^^xsd:dateTime`;
   const count = (n: number | string) => `"${n}"^^xsd:nonNegativeInteger`;
 
-  // ── Blank nodes in preserved triples ────────────────────────────────────
-  // A blank node referenced exactly once is written inline at that reference —
-  // as ( a b c ) for a well-formed RDF list, otherwise as [ p o ; … ]. Others
-  // keep a label and get their own block in the preserved section.
-  const bnodes = buildBlankNodeIndex(ontology);
-  const rendered = new Set<string>();
-  const renderNode = (term: string): string => {
-    const members = bnodes.lists.get(term);
-    if (members && !rendered.has(term)) {
-      bnodes.listCells.get(term)!.forEach((cell) => rendered.add(cell));
-      return `( ${members.map(renderNode).join(" ")} )`;
-    }
-    const own = bnodes.own.get(term);
-    if (own && bnodes.refCount.get(term) === 1 && !rendered.has(term)) {
-      rendered.add(term);
-      return `[ ${groupPairs(own.map(triplePair)).map(([p, objs]) => `${p} ${objs.join(" , ")}`).join(" ; ")} ]`;
-    }
-    return c(term);
-  };
-  const triplePair = (t: { predicate: string; object: string; isLiteral: boolean; lang?: string; datatype?: string }): Pair =>
-    [t.predicate === RDF.type ? "a" : c(t.predicate), t.isLiteral ? typedLit(t.object, t.datatype, t.lang) : renderNode(t.object)];
+  const bnodes = createNodeRenderer(allRawTriples(ontology), countReferences(ontology), c);
+  const { renderNode, triplePair } = bnodes;
 
   // Legacy: blank-node union classes stored as OntologyClass (pre-ClassExpression
   // data that skipped migration). Inline them where referenced.
@@ -127,20 +84,9 @@ export function serializeToTurtle(ontology: Ontology): string {
   }
 
   const emitBlock = (subject: string, pairs: Pair[]) => {
-    const groups = groupPairs(pairs);
-    if (groups.length === 0) return;
-    groups.forEach(([predicate, objects], i) => {
-      const lead = i === 0 ? `${subject} ` : "    ";
-      const end = i === groups.length - 1 ? " ." : " ;";
-      const oneLine = `${lead}${predicate} ${objects.join(" , ")}${end}`;
-      if (objects.length === 1 || oneLine.length <= 100) {
-        lines.push(oneLine);
-      } else {
-        lines.push(`${lead}${predicate} ${objects[0]} ,`);
-        objects.slice(1).forEach((obj, j) => lines.push(`        ${obj}${j === objects.length - 2 ? end : " ,"}`));
-      }
-    });
-    lines.push("");
+    const block = formatBlock(subject, pairs);
+    if (block.length === 0) return;
+    lines.push(...block, "");
   };
   const sectionLines = (title: string) => [`# ── ${title} ${"─".repeat(Math.max(3, 70 - title.length))}`, ""];
   const section = (title: string) => lines.push(...sectionLines(title));
@@ -173,8 +119,11 @@ export function serializeToTurtle(ontology: Ontology): string {
     if (meta.ontologyComment) pairs.push(["rdfs:comment", langLit({ value: meta.ontologyComment, lang: meta.ontologyCommentLang ?? "" })]);
     if (meta.versionIRI) pairs.push(["owl:versionIRI", c(meta.versionIRI)]);
     if (meta.versionInfo) pairs.push(["owl:versionInfo", `"${escLit(meta.versionInfo)}"`]);
+    // Imports are always written as full IRIs — `foaf:` alone is valid but obscure
+    for (const imported of meta.imports ?? []) pairs.push(["owl:imports", iriRef(imported)]);
     pushLangStrings(pairs, "skos:editorialNote", meta.editorialNotes);
     pushTimestamps(pairs, meta);
+    pushExtras(pairs, meta.extraTriples);
     emitBlock(c(meta.ontologyUri), pairs);
   }
 
@@ -219,28 +168,16 @@ export function serializeToTurtle(ontology: Ontology): string {
     for (const ind of individuals) emitBlock(c(ind.uri), individualPairs(ind));
   }
 
-  // ── 6. Preserved triples ────────────────────────────────────────────────
-  // Roots first (IRIs and multiply-referenced / unreferenced blank nodes);
-  // single-reference blank nodes are inlined into whichever block renders them.
-  const preservedBySubject = new Map<string, typeof ontology.unmappedTriples>();
-  for (const t of ontology.unmappedTriples) {
-    const list = preservedBySubject.get(t.subject) ?? [];
-    list.push(t);
-    preservedBySubject.set(t.subject, list);
-  }
-  const preservedLines = lines.length;
-  const emitPreserved = (subject: string) => {
-    if (rendered.has(subject)) return;
-    rendered.add(subject);
-    const label = isBlankNode(subject) && (bnodes.refCount.get(subject) ?? 0) === 0 ? "[]" : c(subject);
-    emitBlock(label, preservedBySubject.get(subject)!.map(triplePair));
-  };
-  const isInlineable = (subject: string) => isBlankNode(subject) && bnodes.refCount.get(subject) === 1;
-  for (const subject of preservedBySubject.keys()) if (!isInlineable(subject)) emitPreserved(subject);
-  // Anything left is only reachable from a cycle of blank nodes — give it a label.
-  for (const subject of preservedBySubject.keys()) emitPreserved(subject);
-  if (lines.length > preservedLines) {
-    lines.splice(preservedLines, 0, ...sectionLines("Preserved triples"));
+  // ── 6. Other statements ─────────────────────────────────────────────────
+  // Raw triples whose subject isn't an entity. Anything still unwritten after
+  // them (an owned structure that somehow wasn't inlined) is emitted too, so
+  // nothing can be lost.
+  const unmapped = new Set(ontology.unmappedTriples);
+  const leftovers = allRawTriples(ontology).filter((t) => !unmapped.has(t) && !bnodes.rendered.has(t.subject));
+  const otherGroups = statementGroups([...ontology.unmappedTriples, ...leftovers], bnodes, c);
+  if (otherGroups.length > 0) {
+    section("Other statements");
+    for (const group of otherGroups) lines.push(...group.lines, "");
   }
 
   return lines.join("\n");
@@ -302,91 +239,4 @@ function propertyCardinalityRestrictions(prop: OntologyProperty): OntologyRestri
     add("maxCardinality", prop.maxCardinality);
   }
   return out;
-}
-
-/** Group pairs by predicate (first-seen order), with `a` always first. */
-function groupPairs(pairs: Pair[]): Array<[string, string[]]> {
-  const groups = new Map<string, string[]>();
-  for (const [predicate, object] of pairs) {
-    const objects = groups.get(predicate) ?? [];
-    if (!objects.includes(object)) objects.push(object);
-    groups.set(predicate, objects);
-  }
-  const entries = [...groups.entries()];
-  const typeIdx = entries.findIndex(([p]) => p === "a");
-  if (typeIdx > 0) entries.unshift(entries.splice(typeIdx, 1)[0]!);
-  return entries;
-}
-
-interface BlankNodeIndex {
-  /** Preserved triples per blank-node subject */
-  own: Map<string, Ontology["unmappedTriples"]>;
-  /** Number of references to each term (as an object) across the whole ontology */
-  refCount: Map<string, number>;
-  /** Well-formed RDF list head → members */
-  lists: Map<string, string[]>;
-  /** List head → all of its cells */
-  listCells: Map<string, string[]>;
-}
-
-/**
- * Index blank nodes among the preserved triples. A list qualifies for inline
- * ( … ) syntax when every cell is a blank node with exactly one rdf:first and
- * one rdf:rest, nothing else, and is referenced exactly once.
- */
-function buildBlankNodeIndex(ontology: Ontology): BlankNodeIndex {
-  const own = new Map<string, Ontology["unmappedTriples"]>();
-  const refCount = new Map<string, number>();
-  const bump = (term: string) => refCount.set(term, (refCount.get(term) ?? 0) + 1);
-
-  for (const t of ontology.unmappedTriples) {
-    if (isBlankNode(t.subject)) {
-      const list = own.get(t.subject) ?? [];
-      list.push(t);
-      own.set(t.subject, list);
-    }
-    if (!t.isLiteral) bump(t.object);
-  }
-  const bumpExtras = (extras: ExtraTriple[] | undefined) => { for (const et of extras ?? []) if (!et.isLiteral) bump(et.object); };
-  for (const cls of ontology.classes) {
-    bumpExtras(cls.extraTriples);
-    cls.subClassOf.forEach(bump);
-    (cls.disjointWith ?? []).forEach(bump);
-  }
-  for (const prop of ontology.properties) bumpExtras(prop.extraTriples);
-  for (const ind of ontology.individuals ?? []) {
-    for (const pv of ind.propertyValues) if (!pv.isLiteral) bump(pv.value);
-    ind.typeUris.forEach(bump);
-  }
-
-  const isCell = (term: string): boolean => {
-    const ts = own.get(term);
-    return !!ts && ts.length === 2 && refCount.get(term) === 1
-      && ts.some((t) => t.predicate === RDF.first)
-      && ts.some((t) => t.predicate === RDF.rest && !t.isLiteral);
-  };
-
-  const restObjects = new Set(ontology.unmappedTriples.filter((t) => t.predicate === RDF.rest).map((t) => t.object));
-  const lists = new Map<string, string[]>();
-  const listCells = new Map<string, string[]>();
-  for (const head of own.keys()) {
-    // Tails are reached through their head; only heads are rendered inline.
-    if (restObjects.has(head) || !isCell(head)) continue;
-    const members: string[] = [];
-    const cells: string[] = [];
-    let ok = true;
-    for (let cur = head; cur !== RDF.nil;) {
-      if (!isCell(cur) || cells.includes(cur)) { ok = false; break; }
-      const ts = own.get(cur)!;
-      const first = ts.find((t) => t.predicate === RDF.first)!;
-      if (first.isLiteral) { ok = false; break; }
-      members.push(first.object);
-      cells.push(cur);
-      cur = ts.find((t) => t.predicate === RDF.rest)!.object;
-    }
-    if (!ok) continue;
-    lists.set(head, members);
-    listCells.set(head, cells);
-  }
-  return { own, refCount, lists, listCells };
 }

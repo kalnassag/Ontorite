@@ -8,6 +8,7 @@ import type { ClassExpression, OntologyClass, OntologyProperty } from "../../typ
 import { classExprReplace } from "../../types";
 import { buildUri } from "../uri-utils";
 import { domainUris } from "../selectors";
+import { freshenExtras } from "../raw-triples";
 import { genId, nowIso } from "./ids";
 import type { Slice } from "./types";
 
@@ -50,12 +51,14 @@ export const clipboardSlice: Slice<ClipboardKeys> = (set, get, { commit }) => ({
     if (item.type === "class") {
       const { cls, properties } = item;
       const target = rebase(cls.localName);
-      const newCls: OntologyClass = { ...cls, ...target, id: genId(), created: stamp, modified: stamp };
+      // Fresh blank-node labels so pasted axioms can't merge with existing ones
+      const newCls: OntologyClass = { ...cls, ...target, id: genId(), extraTriples: freshenExtras(cls.extraTriples), created: stamp, modified: stamp };
       // Domains that referenced the source class now point at the pasted copy
       const newProps: OntologyProperty[] = properties.map((prop) => ({
         ...prop,
         ...rebase(prop.localName),
         id: genId(),
+        extraTriples: freshenExtras(prop.extraTriples),
         domain: classExprReplace(prop.domain, cls.uri, target.uri),
         created: stamp,
         modified: stamp,
@@ -69,6 +72,7 @@ export const clipboardSlice: Slice<ClipboardKeys> = (set, get, { commit }) => ({
     const domain: ClassExpression = opts?.domainUri !== undefined ? { kind: "class", uri: opts.domainUri } : property.domain;
     const newProp: OntologyProperty = {
       ...property, ...rebase(property.localName), id: genId(), domain, created: stamp, modified: stamp,
+      extraTriples: freshenExtras(property.extraTriples),
     };
     commit((o) => ({ ...o, properties: [...o.properties, newProp] }));
     return newProp.id;

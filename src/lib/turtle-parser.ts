@@ -21,17 +21,31 @@ function findBase(text: string): string {
   return m?.[1] ?? "";
 }
 
-export function parseTurtle(input: string, format: "Turtle" | "N-Triples" = "Turtle"): ParseResult {
+/** Prefix N3 puts on explicitly written blank-node labels when asked to keep them. */
+export const KEPT_LABEL_PREFIX = "keep_";
+
+/**
+ * @param keepBlankNodeLabels For editor snippets: explicit labels (`_:x`) come
+ *   back as `_:keep_x` and generated ones (`[]`) as `_:n3-N`, so the caller can
+ *   preserve references to existing blank nodes. Otherwise all blank nodes are
+ *   relabelled `_:b0…` per document.
+ */
+export function parseTurtle(
+  input: string,
+  format: "Turtle" | "N-Triples" = "Turtle",
+  { keepBlankNodeLabels = false } = {},
+): ParseResult {
   const prefixes: Record<string, string> = {};
   const errors: ParseError[] = [];
   let triples: ParseResult["triples"] = [];
 
   try {
-    const parser = new Parser({ format });
+    const parser = new Parser(keepBlankNodeLabels ? { format, blankNodePrefix: KEPT_LABEL_PREFIX } : { format });
     const quads = parser.parse(input, null, (prefix, iri) => {
       prefixes[prefix] = iri.value;
     }) as unknown as RdfQuad[];
-    triples = relabelBlankNodes(quads.map(quadToParsedTriple));
+    const mapped = quads.map(quadToParsedTriple);
+    triples = keepBlankNodeLabels ? mapped : relabelBlankNodes(mapped);
   } catch (err) {
     const e = err as Error & { context?: { line?: number } };
     errors.push({
