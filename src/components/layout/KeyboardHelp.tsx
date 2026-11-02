@@ -17,7 +17,8 @@ const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: `${MOD}+Z`, action: "Undo" },
   { keys: `${MOD}+Y / ${MOD}+Shift+Z`, action: "Redo" },
   { keys: `${MOD}+V`, action: "Paste" },
-  { keys: `${MOD}+S`, action: "Save to file" },
+  { keys: `${MOD}+S`, action: "Save to file (in Source: apply, then save)" },
+  { keys: `${MOD}+Enter`, action: "Source view: apply edits" },
   { keys: "Escape", action: "Cancel / close form" },
 ];
 

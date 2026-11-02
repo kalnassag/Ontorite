@@ -23,7 +23,7 @@ import {
   Plus, Sun, Moon, Network, ChevronsDown, ChevronsUp, Layers, Users,
   ShieldCheck, Share2, PanelLeftClose, PanelLeftOpen, Clipboard, X,
   GitCompare, AlertCircle, AlertTriangle, RotateCcw, RotateCw, HelpCircle,
-  Info, GitFork,
+  Info, GitFork, FileCode,
 } from "lucide-react";
 import OntologyMetadataDrawer from "../dialogs/OntologyMetadataDrawer";
 
@@ -32,6 +32,7 @@ const OntologyGraph = lazy(() => import("../graph/OntologyGraph"));
 const EntityGraph = lazy(() => import("../graph/EntityGraph"));
 const TreeGraph = lazy(() => import("../graph/TreeGraph"));
 const OntologyDiff = lazy(() => import("../core/OntologyDiff"));
+const SourceView = lazy(() => import("../source/SourceEditor").then((m) => ({ default: m.SourceView })));
 
 const viewFallback = (
   <div className="flex h-full items-center justify-center text-xs text-th-fg-3">Loading view…</div>
@@ -57,7 +58,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
-type ViewMode = "classes" | "individuals" | "graph" | "tree" | "entity-graph" | "diff";
+type ViewMode = "classes" | "individuals" | "graph" | "tree" | "entity-graph" | "diff" | "source";
 
 export default function App() {
   const init = useStore((s) => s.init);
@@ -134,7 +135,7 @@ export default function App() {
   // while typing in a field, so native text undo keeps working.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.defaultPrevented) return;
       const key = e.key.toLowerCase();
       if (key === "s") {
         e.preventDefault();
@@ -442,10 +443,22 @@ export default function App() {
                   <GitCompare size={12} />
                   Diff
                 </button>
+                <button
+                  onClick={() => setViewMode("source")}
+                  className={`flex items-center gap-1 border-l border-th-border-muted px-2 py-1 text-2xs font-medium ${
+                    viewMode === "source"
+                      ? "bg-blue-600 text-white"
+                      : "text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
+                  }`}
+                  title="Edit the ontology as Turtle"
+                >
+                  <FileCode size={12} />
+                  Source
+                </button>
               </div>
 
               {/* Expand/Collapse all (only in classes or individuals view) */}
-              {viewMode !== "graph" && viewMode !== "entity-graph" && viewMode !== "diff" && (
+              {viewMode !== "graph" && viewMode !== "entity-graph" && viewMode !== "diff" && viewMode !== "source" && (
                 <button
                   onClick={toggleExpandAll}
                   className="rounded p-1 text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
@@ -580,6 +593,10 @@ export default function App() {
             ) : viewMode === "graph" ? (
               <div className="relative flex-1 overflow-hidden">
                 <Suspense fallback={viewFallback}><OntologyGraph onClose={() => setViewMode("classes")} /></Suspense>
+              </div>
+            ) : viewMode === "source" ? (
+              <div className="relative flex-1 overflow-hidden">
+                <Suspense fallback={viewFallback}><SourceView /></Suspense>
               </div>
             ) : viewMode === "tree" ? (
               <div className="relative flex-1 overflow-hidden">

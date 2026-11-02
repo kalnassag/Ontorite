@@ -24,6 +24,8 @@ teaching tool or a toy. Assume the user understands OWL 2, RDF, RDFS, SKOS, and 
 - **Turtle serialization:** Custom serializer in `src/lib/turtle-serializer.ts`
   (the readable output is a feature). Other export formats go Turtle → N3 → target.
 - **Graphs:** `d3-force` (layout only; rendering is React SVG)
+- **Source editor:** CodeMirror 6 (`@codemirror/*`, Turtle via `@codemirror/legacy-modes`),
+  lazy-loaded with the Source view — don't reintroduce Monaco (multi-MB, CDN-loaded)
 - **Animation:** CSS keyframes in `tailwind.config.js` (no animation library; respect `motion-reduce`)
 - **Icons:** Lucide React
 - **Tests:** Vitest (`npm test`), including an RDF-isomorphism round-trip suite
@@ -102,6 +104,16 @@ Each property has:
    entity's card as the exact Turtle that's exported, and edited as a Turtle snippet
    (parsed with N3; a structure is always replaced whole, never half-edited).
 
+7. **The Source view edits a projection, not a file.** It shows exactly what the
+   export writes. Applying parses the text strictly and *reconciles* it into the model
+   (`lib/source-apply.ts`): entities are matched by IRI (IDs survive), unchanged
+   entities keep their exact object and timestamps, changed ones get a new
+   `dcterms:modified`, removals need confirmation, and it's one undo step. The text is
+   then regenerated, so formatting and `#` comments are **not** kept (agreed trade-off;
+   the editor flags comments inline). Keeping comments would need per-entity comment
+   anchoring in the model — a possible follow-up, not a reason to make text the
+   source of truth.
+
 6. **Imports are recorded, not loaded.** `owl:imports` is edited in the metadata
    drawer and exported as full IRIs, but imported ontologies aren't fetched.
    Validation therefore only reports unknown references inside the ontology's own
@@ -128,6 +140,7 @@ src/
               CharacteristicsEditor, VocabAutocomplete
     dialogs/  OntologyMetadataDrawer, EditorialNotesDrawer, CreateEntityDialog, CreateEdgeDialog
     graph/    OntologyGraph (force), TreeGraph (hierarchy), EntityGraph (neighbourhood)
+    source/   SourceEditor (Turtle editing view), turtle-editor-setup (CodeMirror config)
   lib/
     turtle-parser.ts      Turtle/N-Triples → ParsedTriple[] (N3.js adapter, strict)
     model-builder.ts      ParsedTriple[] → domain model (see decision 4)
@@ -135,6 +148,9 @@ src/
     turtle-format.ts      shared Turtle rendering (serializer + UI show identical text)
     turtle-snippets.ts    parse user-typed Turtle (predicate lists, statements)
     raw-triples.ts        blank-node ownership, routing, renaming, relabelling
+    source-apply.ts       reconcile edited Turtle into the model (Source view)
+    turtle-comments.ts    find `#` comments (outside IRIs/strings) to warn about
+    class-refs.ts         resolve picker text to class IRIs; create unknown classes
     formats/              JSON-LD / RDF/XML / N-Triples adapters (lazy-loaded)
     store.ts              Zustand store, composed from store/*-slice.ts
     store/                internals.ts (commit: undo + persistence), migrations.ts, slices
@@ -235,6 +251,7 @@ src/
 
 15. **Keyboard shortcuts**
     - `Ctrl+N` new class, `Ctrl+Shift+N` new property, `Ctrl+S` export, `Ctrl+Z` undo
+    - In the Source view: `Ctrl+Enter` apply, `Ctrl+S` apply then save, `Ctrl+F` find
 
 ## Import Requirements
 
