@@ -56,6 +56,12 @@ export interface EditorState {
   deleteOntology: (id: string) => void;
   setActiveOntology: (id: string | null) => void;
   updateMetadata: (patch: Partial<OntologyMetadata>) => void;
+  /**
+   * Replace the active ontology's content with a reconciled version (from the
+   * Source view — see lib/source-apply.ts). One undo step. Ignored if `next`
+   * isn't the active ontology.
+   */
+  replaceOntologyContent: (next: Ontology) => void;
 
   // ── Classes ────────────────────────────────────────────────────────
   addClass: (cls: Partial<OntologyClass>, opts?: EditOptions) => string;

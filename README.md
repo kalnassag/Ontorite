@@ -33,6 +33,7 @@ Protégé, WebVOWL, and PoolParty all display properties as a flat list disconne
 - **Editorial notes** — multilingual `skos:editorialNote` on every class, property, individual, and on the ontology itself. Edit in a right-side drawer; entities with notes show a persistent amber indicator
 - **Ontology version metadata** — `owl:versionIRI` and `owl:versionInfo` are parsed, edited in the metadata drawer, and round-trip cleanly. `versionInfo` shows as a small `vX.Y.Z` badge next to the ontology name in the top bar and sidebar
 - **Automatic timestamps** — every class, property, individual, and ontology gets `dcterms:created` stamped on add and `dcterms:modified` re-stamped on every edit. Hover any entity for "Modified 3h ago · Created 5d ago"
+- **Source view (edit as Turtle)** — edit the whole ontology as text with Turtle highlighting, live syntax errors, autocomplete for your prefixes, classes and properties, and find/replace. `Ctrl+Enter` applies: changes are reconciled into the model (open cards and IDs survive, only changed entities get a new `dcterms:modified`, deletions ask first) as a single undo step. The text is regenerated on apply, so `#` comments aren't kept — the editor flags them; use `skos:editorialNote` for notes you want to keep
 - **Nothing is hidden or lost** — OWL that Ontorite doesn't model with forms (qualified cardinalities, intersections, `owl:oneOf`, property chains…) appears on its class or property card as *Other axioms*, written as the exact Turtle that's exported and editable as Turtle. Statements about subjects that aren't entities of the ontology sit in an *Other statements* panel, grouped by subject, where an untyped subject can be declared as a class or property in one click
 - **`owl:imports` and header annotations** — imports, `dcterms:license`, `dcterms:creator` and any other statements about the ontology are edited in the metadata drawer and kept in the `owl:Ontology` block
 
@@ -53,7 +54,7 @@ Protégé, WebVOWL, and PoolParty all display properties as a flat list disconne
 ### Usability
 - **Dark and light mode** — persisted per device
 - **Persists across sessions** — everything is saved to IndexedDB automatically; no cloud required
-- **Keyboard shortcuts** — `Ctrl+N` new class, `Ctrl+Shift+N` new property on the selected class, `Ctrl+Z` undo, `Ctrl+Y` redo, `Ctrl+V` paste, `Ctrl+S` save
+- **Keyboard shortcuts** — `Ctrl+N` new class, `Ctrl+Shift+N` new property on the selected class, `Ctrl+Z` undo, `Ctrl+Y` redo, `Ctrl+V` paste, `Ctrl+S` save; in the Source view `Ctrl+Enter` apply, `Ctrl+S` apply and save
 
 ---
 

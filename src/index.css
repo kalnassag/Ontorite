@@ -15,6 +15,14 @@
     --th-fg-2: #475569;
     --th-fg-3: #64748b;
     --th-fg-4: #94a3b8;
+    /* Turtle syntax colours (Source view) */
+    --syn-keyword: #7c3aed;
+    --syn-iri: #0369a1;
+    --syn-name: #1d4ed8;
+    --syn-prefix: #b45309;
+    --syn-string: #15803d;
+    --syn-comment: #94a3b8;
+    --syn-punct: #64748b;
   }
 
   .dark {
@@ -28,6 +36,13 @@
     --th-fg-2: #cbd5e1;
     --th-fg-3: #94a3b8;
     --th-fg-4: #64748b;
+    --syn-keyword: #c4b5fd;
+    --syn-iri: #7dd3fc;
+    --syn-name: #93c5fd;
+    --syn-prefix: #fcd34d;
+    --syn-string: #86efac;
+    --syn-comment: #64748b;
+    --syn-punct: #94a3b8;
   }
 
   /* Scrollbar styling */

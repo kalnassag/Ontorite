@@ -18,7 +18,7 @@ type LifecycleKeys =
   | "ontologies" | "activeOntologyId" | "initialized" | "history" | "importWarnings"
   | "undo" | "redo" | "clearImportWarnings" | "getActiveOntology" | "hasFileHandle"
   | "init" | "createOntology" | "importOntology" | "importOntologyAsync" | "importOntologyWithHandle"
-  | "_addImported" | "deleteOntology" | "setActiveOntology" | "updateMetadata";
+  | "_addImported" | "deleteOntology" | "setActiveOntology" | "updateMetadata" | "replaceOntologyContent";
 
 const formatParseError = (err: ParseError) => (err.line ? `Line ${err.line}: ${err.message}` : err.message);
 
@@ -183,6 +183,8 @@ export const lifecycleSlice: Slice<LifecycleKeys> = (set, get, { commit, persist
     setActiveOntology: (id) => {
       set({ activeOntologyId: id, lastFileSaveTime: id && hasHandle(id) ? Date.now() : null });
     },
+
+    replaceOntologyContent: (next) => commit((o) => (o.id === next.id ? next : o)),
 
     updateMetadata: (patch) => {
       const stamp = new Date().toISOString();
