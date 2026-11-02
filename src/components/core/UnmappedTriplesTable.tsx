@@ -9,6 +9,10 @@
 import { forwardRef, useMemo, useState } from "react";
 import { AlertTriangle, Trash2, ArrowRightToLine } from "lucide-react";
 import { useStore } from "../../lib/store";
+import { useActivePrefixes } from "../../lib/store-hooks";
+import type { UnmappedTriple } from "../../types";
+
+const EMPTY_TRIPLES: UnmappedTriple[] = [];
 import { compact, expand } from "../../lib/uri-utils";
 
 interface CellProps {
@@ -25,7 +29,6 @@ function EditableCell({ value, onCommit, monospace, placeholder, invalid, warnin
   const [focused, setFocused] = useState(false);
   // Sync external updates when not focused
   if (!focused && draft !== value) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     setDraft(value);
   }
   return (
@@ -74,8 +77,8 @@ const UnmappedTriplesTable = forwardRef<HTMLDivElement>(function UnmappedTriples
   const promoteUnmappedTriple = useStore((s) => s.promoteUnmappedTriple);
   const [promotingIdx, setPromotingIdx] = useState<number | null>(null);
 
-  const prefixes = activeOntology?.metadata.prefixes ?? {};
-  const triples = activeOntology?.unmappedTriples ?? [];
+  const prefixes = useActivePrefixes();
+  const triples = useStore((st) => st.getActiveOntology()?.unmappedTriples ?? EMPTY_TRIPLES);
 
   const rows = useMemo(() => triples.map((t, idx) => ({
     idx,

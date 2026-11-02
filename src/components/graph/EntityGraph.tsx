@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ZoomIn, ZoomOut, Maximize2, Plus, Link, Trash2 } from "lucide-react";
 import { useStore } from "../../lib/store";
+import { useActiveClasses, useActiveIndividuals, useActiveProperties } from "../../lib/store-hooks";
 import { computeLayout } from "../../lib/graph-utils";
 import { localName } from "../../lib/uri-utils";
 import CreateEntityDialog from "../dialogs/CreateEntityDialog";
@@ -106,9 +107,9 @@ export default function EntityGraph() {
   // Context menu
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
 
-  const individuals = activeOntology?.individuals ?? [];
-  const classes = activeOntology?.classes ?? [];
-  const properties = activeOntology?.properties ?? [];
+  const individuals = useActiveIndividuals();
+  const classes = useActiveClasses();
+  const properties = useActiveProperties();
   const objectProperties = properties.filter((p) => p.type === "owl:ObjectProperty");
 
   const colorMap = useMemo(() => buildColorMap(individuals), [individuals]);

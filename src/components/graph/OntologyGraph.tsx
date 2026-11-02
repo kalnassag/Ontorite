@@ -17,6 +17,7 @@ import {
 } from "d3-force";
 import { X, ZoomIn, ZoomOut, Maximize2, RefreshCw, Plus, Pencil, Trash2, CirclePlus } from "lucide-react";
 import { useStore } from "../../lib/store";
+import { useActiveClasses, useActivePrefixes, useActiveProperties } from "../../lib/store-hooks";
 import { domainUris } from "../../lib/selectors";
 import { compact } from "../../lib/uri-utils";
 import { classExprFormat } from "../../types";
@@ -149,8 +150,9 @@ export default function OntologyGraph({ onClose }: Props) {
   // A single incrementing counter forces React to re-read positions from the refs
   const [, forceRedraw] = useState(0);
 
-  const classes    = activeOntology?.classes    ?? [];
-  const properties = activeOntology?.properties ?? [];
+  const classes = useActiveClasses();
+  const properties = useActiveProperties();
+  const prefixes = useActivePrefixes();
 
   const [hoveredId,        setHoveredId]        = useState<string | null>(null);
   // Kept for legacy double-click path but now superseded by floatingPanel
@@ -182,7 +184,6 @@ export default function OntologyGraph({ onClose }: Props) {
       return;
     }
 
-    const prefixes = activeOntology?.metadata.prefixes ?? {};
 
     // -- Nodes --
     // Helpers: ClassExpression → list of URIs
@@ -405,7 +406,7 @@ export default function OntologyGraph({ onClose }: Props) {
 
     simRef.current = sim;
     forceRedraw((n) => n + 1);
-  }, [classes, properties, activeOntology, scheduleTick, showDatatypes, showAnnotations]);
+  }, [classes, properties, prefixes, scheduleTick, showDatatypes, showAnnotations]);
 
   useEffect(() => {
     buildSimulation();
@@ -953,7 +954,6 @@ export default function OntologyGraph({ onClose }: Props) {
         if (!node) return null;
         if (node.kind === "class") {
           const cls = classes.find((c) => c.id === node.id);
-          const prefixes = activeOntology?.metadata.prefixes ?? {};
           const domainIncludes = (p: typeof properties[number]) => domainUris(p).includes(node.uri);
           const ownDatatype = properties.filter((p) => p.type === "owl:DatatypeProperty" && domainIncludes(p));
           const ownAnnotation = properties.filter((p) => p.type === "owl:AnnotationProperty" && domainIncludes(p));

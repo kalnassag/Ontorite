@@ -4,7 +4,7 @@
 
 import { useMemo, useState } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
-import { useStore } from "../../lib/store";
+import { useActiveClasses, useActiveProperties } from "../../lib/store-hooks";
 import { domainUris } from "../../lib/selectors";
 import type { OntologyClass } from "../../types";
 
@@ -162,11 +162,10 @@ function TreeRow({
 }
 
 export default function ClassHierarchyTree({ onSelectClass, onDoubleClickClass, selectedClassId, search }: Props) {
-  const activeOntology = useStore((s) => s.getActiveOntology());
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  const classes = activeOntology?.classes ?? [];
-  const properties = activeOntology?.properties ?? [];
+  const classes = useActiveClasses();
+  const properties = useActiveProperties();
 
   const propertyCountMap = useMemo(() => {
     const map = new Map<string, number>();

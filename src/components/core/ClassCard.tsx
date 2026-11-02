@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { memo, useState, useEffect, useRef } from 'react';
 import { useStore } from "../../lib/store";
+import { useActivePrefixes, useActiveClasses } from "../../lib/store-hooks";
 import { compact } from "../../lib/uri-utils";
 import PropertyRow from './PropertyRow';
 import ClassForm from '../forms/ClassForm';
@@ -38,14 +38,14 @@ const TYPE_COLOR: Record<string, string> = {
   'owl:AnnotationProperty': 'text-prop-annotation-500',
 };
 
-export default function ClassCard({ cls, properties, defaultExpanded = true, highlighted = false, onDelete }: Props) {
+function ClassCard({ cls, properties, defaultExpanded = true, highlighted = false, onDelete }: Props) {
   const deleteClass = useStore((s) => s.deleteClass);
   const copyClass = useStore((s) => s.copyClass);
   const pasteClipboard = useStore((s) => s.pasteClipboard);
   const clipboard = useStore((s) => s.clipboard);
   const updateClass = useStore((s) => s.updateClass);
-  // E2: Use stable inline selector instead of getActiveOntology()
-  const activeOntology = useStore((s) => s.ontologies.find(o => o.id === s.activeOntologyId));
+  const prefixes = useActivePrefixes();
+  const allClasses = useActiveClasses();
 
   const cardRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
@@ -70,8 +70,6 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [addingProperty]);
 
-  const prefixes = activeOntology?.metadata.prefixes ?? {};
-  const allClasses = activeOntology?.classes ?? [];
 
   const primaryLabel = cls.labels[0]?.value || cls.localName;
   const allLabels = cls.labels;
@@ -99,7 +97,7 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
   return (
     <div
       ref={cardRef}
-      className={`rounded border bg-th-surface transition-shadow duration-300 ${
+      className={`rounded border bg-th-surface transition-shadow duration-300 [contain-intrinsic-size:auto_160px] [content-visibility:auto] ${
         highlighted ? "border-blue-500 ring-2 ring-blue-500/60" : "border-th-border-muted"
       }`}
     >
@@ -261,15 +259,8 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
       )}
 
       {/* Expanded body: properties + add-property form */}
-      <AnimatePresence initial={false}>
-        {expanded && !editingClass && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
+              {expanded && !editingClass && (
+          <div className="animate-expand-in motion-reduce:animate-none">
             <div className="border-t border-th-border-muted pb-1">
               {TYPE_ORDER.map((type) => {
                 const group = grouped.get(type) ?? [];
@@ -283,7 +274,7 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
                       <PropertyRow
                         key={prop.id}
                         property={prop}
-                        onDelete={onDelete ? (label) => onDelete(label) : undefined}
+                        onDelete={onDelete}
                         viewedFromClassUri={cls.uri}
                       />
                     ))}
@@ -369,9 +360,11 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
                 </div>
               )}
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
     </div>
   );
 }
+
+/** Memoised: App keeps `properties` arrays referentially stable per class. */
+export default memo(ClassCard);

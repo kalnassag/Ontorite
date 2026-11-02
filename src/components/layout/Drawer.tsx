@@ -4,7 +4,6 @@
  */
 
 import { useEffect } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 
 interface Props {
@@ -28,47 +27,37 @@ export default function Drawer({ open, onClose, title, subtitle, width = 420, ch
     return () => window.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
+  if (!open) return null;
+
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            key="drawer-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
+    <>
+      <div
+        onClick={onClose}
+        className="fixed inset-0 z-40 animate-fade-in bg-black/30 motion-reduce:animate-none"
+      />
+      <aside
+        role="dialog"
+        aria-label={title}
+        style={{ width }}
+        className="fixed inset-y-0 right-0 z-50 flex animate-slide-in-right flex-col border-l border-th-border bg-th-base shadow-2xl motion-reduce:animate-none"
+      >
+        <header className="flex items-start gap-2 border-b border-th-border px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-sm font-semibold text-th-fg">{title}</h3>
+            {subtitle && (
+              <p className="truncate font-mono text-2xs text-th-fg-3">{subtitle}</p>
+            )}
+          </div>
+          <button
             onClick={onClose}
-            className="fixed inset-0 z-40 bg-black/30"
-          />
-          <motion.aside
-            key="drawer-panel"
-            initial={{ x: width }}
-            animate={{ x: 0 }}
-            exit={{ x: width }}
-            transition={{ type: "tween", duration: 0.2, ease: "easeOut" }}
-            style={{ width }}
-            className="fixed inset-y-0 right-0 z-50 flex flex-col border-l border-th-border bg-th-base shadow-2xl"
+            className="rounded p-1 text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
+            title="Close (Esc)"
           >
-            <header className="flex items-start gap-2 border-b border-th-border px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <h3 className="truncate text-sm font-semibold text-th-fg">{title}</h3>
-                {subtitle && (
-                  <p className="truncate font-mono text-2xs text-th-fg-3">{subtitle}</p>
-                )}
-              </div>
-              <button
-                onClick={onClose}
-                className="rounded p-1 text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
-                title="Close (Esc)"
-              >
-                <X size={14} />
-              </button>
-            </header>
-            <div className="flex-1 overflow-y-auto px-4 py-3">{children}</div>
-          </motion.aside>
-        </>
-      )}
-    </AnimatePresence>
+            <X size={14} />
+          </button>
+        </header>
+        <div className="flex-1 overflow-y-auto px-4 py-3">{children}</div>
+      </aside>
+    </>
   );
 }

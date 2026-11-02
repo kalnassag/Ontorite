@@ -5,7 +5,6 @@
  */
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, ChevronRight, Pencil, Check, X, Trash2, Plus, StickyNote } from "lucide-react";
 import { useStore } from "../../lib/store";
 import { domainUris } from "../../lib/selectors";
@@ -266,15 +265,8 @@ export default function IndividualCard({ individual, defaultExpanded = false }: 
       )}
 
       {/* Expanded body */}
-      <AnimatePresence initial={false}>
-        {expanded && !editingMeta && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
+              {expanded && !editingMeta && (
+          <div className="animate-expand-in motion-reduce:animate-none">
             <div className="border-t border-th-border-muted pb-1">
               {Array.from(schemaProps.entries()).map(([classUri, props]) => {
                 const clsLabel = allClasses.find((cl) => cl.uri === classUri)?.labels[0]?.value || c(classUri);
@@ -356,9 +348,8 @@ export default function IndividualCard({ individual, defaultExpanded = false }: 
                 </button>
               )}
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
     </div>
   );
 }

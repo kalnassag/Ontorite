@@ -10,7 +10,7 @@
 
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { X, ZoomIn, ZoomOut, Maximize2, RefreshCw } from "lucide-react";
-import { useStore } from "../../lib/store";
+import { useActiveClasses, useActivePrefixes, useActiveProperties } from "../../lib/store-hooks";
 import { domainUris } from "../../lib/selectors";
 import { compact } from "../../lib/uri-utils";
 import { classExprFormat } from "../../types";
@@ -47,10 +47,9 @@ const PALETTE = {
 };
 
 export default function TreeGraph({ onClose }: Props) {
-  const activeOntology = useStore((s) => s.getActiveOntology());
-  const classes = activeOntology?.classes ?? [];
-  const properties = activeOntology?.properties ?? [];
-  const prefixes = activeOntology?.metadata.prefixes ?? {};
+  const classes = useActiveClasses();
+  const properties = useActiveProperties();
+  const prefixes = useActivePrefixes();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);

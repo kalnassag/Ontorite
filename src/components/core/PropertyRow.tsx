@@ -3,9 +3,10 @@
  * Clicking expands to the full edit form.
  */
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Pencil, Trash2, Clipboard, StickyNote } from "lucide-react";
 import { useStore } from "../../lib/store";
+import { useActivePrefixes, useActiveClasses } from "../../lib/store-hooks";
 import { compact } from "../../lib/uri-utils";
 import PropertyForm from "../forms/PropertyForm";
 import EditorialNotesDrawer from "../dialogs/EditorialNotesDrawer";
@@ -30,16 +31,15 @@ const TYPE_BADGE: Record<OntologyProperty["type"], { label: string; className: s
   "owl:AnnotationProperty": { label: "A", className: "bg-prop-annotation-700 text-prop-annotation-100" },
 };
 
-export default function PropertyRow({ property, onDelete, viewedFromClassUri }: Props) {
+function PropertyRow({ property, onDelete, viewedFromClassUri }: Props) {
   const deleteProperty = useStore((s) => s.deleteProperty);
   const copyProperty = useStore((s) => s.copyProperty);
   const updateProperty = useStore((s) => s.updateProperty);
-  const activeOntology = useStore((s) => s.ontologies.find(o => o.id === s.activeOntologyId));
+  const prefixes = useActivePrefixes();
+  const allClasses = useActiveClasses();
   const [editing, setEditing] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
 
-  const prefixes = activeOntology?.metadata.prefixes ?? {};
-  const allClasses = activeOntology?.classes ?? [];
   const badge = TYPE_BADGE[property.type];
   const primaryLabel = property.labels[0]?.value || property.localName;
   const noteCount = (property.editorialNotes ?? []).filter((n) => n.value).length;
@@ -179,3 +179,5 @@ export default function PropertyRow({ property, onDelete, viewedFromClassUri }: 
     </div>
   );
 }
+
+export default memo(PropertyRow);

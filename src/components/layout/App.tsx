@@ -3,7 +3,7 @@
  * Layout: sidebar (ontology list) + main panel (class/property editor)
  */
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { lazy, Suspense, useEffect, useState, useCallback, useMemo, useRef, useDeferredValue } from "react";
 import { useStore, selectActiveOntology, selectCanUndo, selectCanRedo, flushPendingSaves } from "../../lib/store";
 import OntologyList from "./OntologyList";
 import ClassCard from "../core/ClassCard";
@@ -11,13 +11,9 @@ import ClassForm from "../forms/ClassForm";
 import UnassignedProperties from "../core/UnassignedProperties";
 import UnmappedTriplesTable from "../core/UnmappedTriplesTable";
 import ImportExport from "../core/ImportExport";
-import OntologyGraph from "../graph/OntologyGraph";
-import EntityGraph from "../graph/EntityGraph";
-import TreeGraph from "../graph/TreeGraph";
 import IndividualCard from "../core/IndividualCard";
 import ValidationPanel from "../core/ValidationPanel";
 import ClassBrowserPanel from "./ClassBrowserPanel";
-import OntologyDiff from "../core/OntologyDiff";
 import Toast from "./Toast";
 import KeyboardHelp from "./KeyboardHelp";
 import { validate } from "../../lib/validation";
@@ -30,6 +26,16 @@ import {
   Info, GitFork,
 } from "lucide-react";
 import OntologyMetadataDrawer from "../dialogs/OntologyMetadataDrawer";
+
+// Heavy views are code-split: most sessions start (and stay) in the class list.
+const OntologyGraph = lazy(() => import("../graph/OntologyGraph"));
+const EntityGraph = lazy(() => import("../graph/EntityGraph"));
+const TreeGraph = lazy(() => import("../graph/TreeGraph"));
+const OntologyDiff = lazy(() => import("../core/OntologyDiff"));
+
+const viewFallback = (
+  <div className="flex h-full items-center justify-center text-xs text-th-fg-3">Loading view…</div>
+);
 
 function useTheme() {
   const [dark, setDark] = useState(() => {
@@ -169,11 +175,23 @@ export default function App() {
   const showToast = useCallback((message: string, action: () => void) => {
     setToast({ message, action });
   }, []);
-
-  const propertiesByDomain = useMemo(
-    () => (activeOntology ? propertiesByDomainOf(activeOntology) : new Map<string, OntologyProperty[]>()),
-    [activeOntology],
+  const handleEntityDeleted = useCallback(
+    (label: string) => showToast(`"${label}" deleted`, undo),
+    [showToast, undo],
   );
+
+  // Per-class property lists are kept referentially stable across edits, so the
+  // memoised ClassCards only re-render when their own properties change.
+  const prevPropertiesByDomain = useRef(new Map<string, OntologyProperty[]>());
+  const propertiesByDomain = useMemo(() => {
+    const next = activeOntology ? propertiesByDomainOf(activeOntology) : new Map<string, OntologyProperty[]>();
+    for (const [classId, list] of next) {
+      const prev = prevPropertiesByDomain.current.get(classId);
+      if (prev && prev.length === list.length && prev.every((p, i) => p === list[i])) next.set(classId, prev);
+    }
+    prevPropertiesByDomain.current = next;
+    return next;
+  }, [activeOntology?.classes, activeOntology?.properties]); // eslint-disable-line react-hooks/exhaustive-deps -- only these two arrays feed the grouping
 
   // U4: Auto-running validation
   const validationIssues = useMemo(
@@ -186,6 +204,27 @@ export default function App() {
     [activeOntology],
   );
 
+  // Filtering/sorting runs against a deferred copy of the query so typing stays
+  // responsive on large ontologies.
+  const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+  const sortedClasses = useMemo(() => {
+    const classes = activeOntology?.classes ?? [];
+    const matches = deferredSearch
+      ? classes.filter((cls) =>
+          cls.localName.toLowerCase().includes(deferredSearch) ||
+          cls.labels.some((l) => l.value.toLowerCase().includes(deferredSearch)))
+      : classes;
+    return [...matches].sort((a, b) => a.localName.localeCompare(b.localName));
+  }, [activeOntology?.classes, deferredSearch]);
+  const sortedIndividuals = useMemo(() => {
+    const individuals = activeOntology?.individuals ?? [];
+    const matches = deferredSearch
+      ? individuals.filter((ind) =>
+          ind.localName.toLowerCase().includes(deferredSearch) || ind.uri.toLowerCase().includes(deferredSearch))
+      : individuals;
+    return [...matches].sort((a, b) => a.localName.localeCompare(b.localName));
+  }, [activeOntology?.individuals, deferredSearch]);
+
   if (!initialized) {
     return (
       <div className="flex h-screen items-center justify-center bg-th-base">
@@ -196,27 +235,6 @@ export default function App() {
 
   const classes = activeOntology?.classes ?? [];
   const individuals = activeOntology?.individuals ?? [];
-  const filteredClasses = search.trim()
-    ? classes.filter((cls) =>
-        cls.labels.some((l) => l.value.toLowerCase().includes(search.toLowerCase())) ||
-        cls.localName.toLowerCase().includes(search.toLowerCase())
-      )
-    : classes;
-
-  const sortedClasses = [...filteredClasses].sort((a, b) =>
-    a.localName.localeCompare(b.localName)
-  );
-
-  const filteredIndividuals = search.trim()
-    ? individuals.filter((ind) =>
-        ind.localName.toLowerCase().includes(search.toLowerCase()) ||
-        ind.uri.toLowerCase().includes(search.toLowerCase())
-      )
-    : individuals;
-
-  const sortedIndividuals = [...filteredIndividuals].sort((a, b) =>
-    a.localName.localeCompare(b.localName)
-  );
 
   // Validation icon for U4
   const hasErrors = validationIssues.some(i => i.severity === "error");
@@ -528,19 +546,19 @@ export default function App() {
             {/* Content: graph, entity-graph, diff, classes, or individuals */}
             {viewMode === "diff" ? (
               <div className="relative flex-1 overflow-hidden">
-                <OntologyDiff />
+                <Suspense fallback={viewFallback}><OntologyDiff /></Suspense>
               </div>
             ) : viewMode === "graph" ? (
               <div className="relative flex-1 overflow-hidden">
-                <OntologyGraph onClose={() => setViewMode("classes")} />
+                <Suspense fallback={viewFallback}><OntologyGraph onClose={() => setViewMode("classes")} /></Suspense>
               </div>
             ) : viewMode === "tree" ? (
               <div className="relative flex-1 overflow-hidden">
-                <TreeGraph onClose={() => setViewMode("classes")} />
+                <Suspense fallback={viewFallback}><TreeGraph onClose={() => setViewMode("classes")} /></Suspense>
               </div>
             ) : viewMode === "entity-graph" ? (
               <div className="relative flex-1 overflow-hidden">
-                <EntityGraph />
+                <Suspense fallback={viewFallback}><EntityGraph /></Suspense>
               </div>
             ) : viewMode === "individuals" ? (
               <div className="flex-1 overflow-y-auto px-4 py-3">
@@ -620,7 +638,7 @@ export default function App() {
                         properties={propertiesByDomain.get(cls.id) ?? []}
                         defaultExpanded={allExpanded}
                         highlighted={highlightedClassId === cls.id}
-                        onDelete={(label) => showToast(`"${label}" deleted`, undo)}
+                        onDelete={handleEntityDeleted}
                       />
                     ))}
                   </div>
