@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import { useActiveClasses, useActiveProperties } from "../../lib/store-hooks";
 import { domainUris } from "../../lib/selectors";
+import ClassHover from "../hover/ClassHover";
 import type { OntologyClass } from "../../types";
 
 interface TreeNode {
@@ -126,13 +127,14 @@ function TreeRow({
           ) : null}
         </span>
 
-        <span
+        <ClassHover
+          uri={node.cls.uri}
           className={`flex-1 truncate font-medium ${
             highlight ? "text-blue-400" : ""
           }`}
         >
           {label}
-        </span>
+        </ClassHover>
 
         {propCount > 0 && (
           <span className="ml-1 flex-shrink-0 rounded bg-th-hover px-1.5 text-2xs font-medium text-th-fg-2">

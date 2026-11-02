@@ -18,6 +18,7 @@ import Toast from "./Toast";
 import KeyboardHelp from "./KeyboardHelp";
 import ErrorBoundary from "./ErrorBoundary";
 import ViewLoadError from "./ViewLoadError";
+import HoverCardHost from "../hover/HoverCardHost";
 import { validate } from "../../lib/validation";
 import { propertiesByDomain as propertiesByDomainOf, unassignedProperties } from "../../lib/selectors";
 import type { OntologyProperty } from "../../types";
@@ -731,6 +732,8 @@ export default function App() {
       )}
 
       <OntologyMetadataDrawer open={showMetadata} onClose={() => setShowMetadata(false)} />
+      {/* The one hover card for class / property names anywhere in the app */}
+      <HoverCardHost />
     </div>
   );
 }

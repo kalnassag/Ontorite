@@ -23,6 +23,7 @@ Protégé, WebVOWL, and PoolParty all display properties as a flat list disconne
 
 ### Navigation
 - **Class browser panel** — collapsible hierarchy tree for jumping between classes; double-click to navigate and highlight
+- **Hover any class or property name** — in the class browser, cards, parent / disjoint chips, property ranges and union domains, restrictions, individuals, the diff view and form chips — for a card with its labels in every language, description (`rdfs:comment`), prefixed and full IRI (copyable), and parents or domain / range. Terms from other vocabularies are marked as external
 - **Search / filter** — live filter across class *and* property labels and local names, with matches highlighted
 - **Expand / collapse all** — one click to open or close every class card
 

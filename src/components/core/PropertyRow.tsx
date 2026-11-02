@@ -11,10 +11,10 @@ import { compact } from "../../lib/uri-utils";
 import PropertyForm from "../forms/PropertyForm";
 import EditorialNotesDrawer from "../dialogs/EditorialNotesDrawer";
 import TimestampFooter from "./TimestampFooter";
-import { classExprFormat } from "../../types";
 import { characteristicsOf, CHARACTERISTICS } from "../../lib/characteristics";
 import { RDF } from "../../lib/vocab";
 import Highlight from "./Highlight";
+import ClassHover from "../hover/ClassHover";
 import type { ExtraTriple, OntologyProperty } from "../../types";
 import TurtleStatementList from "./TurtleStatementList";
 
@@ -62,13 +62,11 @@ function PropertyRow({ property, onDelete, viewedFromClassUri, search, draggable
     if (found) return found.labels[0]?.value || found.localName;
     return compact(uri, prefixes);
   };
-  const rangeLabel = (property.ranges ?? []).length > 0
-    ? (property.ranges ?? []).map((r) => classExprFormat(r, (u) => compact(u, prefixes))).join(", ")
-    : null;
   // "Shared with" companion classes (union domain only) — excluding the one this row is being viewed under.
-  const unionCompanions: string[] = (property.domain.kind === "union" && viewedFromClassUri)
-    ? property.domain.uris.filter((u) => u !== viewedFromClassUri).map(shortClassUri)
+  const unionCompanionUris: string[] = (property.domain.kind === "union" && viewedFromClassUri)
+    ? property.domain.uris.filter((u) => u !== viewedFromClassUri)
     : [];
+  const unionCompanions = unionCompanionUris.map(shortClassUri);
   const description = property.descriptions[0]?.value;
   const characteristics = characteristicsOf(property);
   const otherExtras = (property.extraTriples ?? []).filter((et) => !isCharacteristicTriple(et));
@@ -102,7 +100,7 @@ function PropertyRow({ property, onDelete, viewedFromClassUri, search, draggable
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium text-th-fg"><Highlight text={primaryLabel} query={search} /></span>
+          <ClassHover uri={property.uri} className="text-sm font-medium text-th-fg"><Highlight text={primaryLabel} query={search} /></ClassHover>
           {characteristics.map((ch) => (
             <span
               key={ch.iri}
@@ -112,15 +110,30 @@ function PropertyRow({ property, onDelete, viewedFromClassUri, search, draggable
               {ch.short}
             </span>
           ))}
-          {rangeLabel && (
-            <span className="font-mono text-xs text-th-fg-3">{rangeLabel}</span>
+          {property.ranges.length > 0 && (
+            <span className="font-mono text-xs text-th-fg-3">
+              {/* Each class / datatype in the range is its own hover target */}
+              {property.ranges.map((r, ri) => (
+                <span key={ri}>
+                  {ri > 0 && ", "}
+                  {(r.kind === "class" ? [r.uri] : r.uris).map((u, ui) => (
+                    <span key={u}>
+                      {ui > 0 && " ∪ "}
+                      <ClassHover uri={u} className="hover:text-th-fg-2">{compact(u, prefixes)}</ClassHover>
+                    </span>
+                  ))}
+                </span>
+              ))}
+            </span>
           )}
           {unionCompanions.length > 0 && (
             <span
               className="rounded bg-blue-100 px-1.5 py-0.5 text-2xs font-medium text-blue-700 dark:bg-blue-500/15 dark:text-blue-400"
-              title={`This property is shared via owl:unionOf with: ${unionCompanions.join(", ")}`}
             >
-              ∪ also: {unionCompanions.join(", ")}
+              ∪ also:{" "}
+              {unionCompanionUris.map((u, i) => (
+                <span key={u}>{i > 0 && ", "}<ClassHover uri={u}>{unionCompanions[i]}</ClassHover></span>
+              ))}
             </span>
           )}
         </div>

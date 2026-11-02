@@ -4,6 +4,7 @@ import { useActivePrefixes, useActiveClasses } from "../../lib/store-hooks";
 import { compact } from "../../lib/uri-utils";
 import PropertyRow, { PROPERTY_DRAG_TYPE } from './PropertyRow';
 import Highlight from './Highlight';
+import ClassHover from '../hover/ClassHover';
 import TurtleStatementList from './TurtleStatementList';
 import ClassForm from '../forms/ClassForm';
 import PropertyForm from '../forms/PropertyForm';
@@ -152,24 +153,20 @@ function ClassCard({ cls, properties, defaultExpanded = true, highlighted = fals
         <div className="group flex min-w-0 flex-1 items-start gap-2 py-1.5 pr-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
-              <span className="text-base font-semibold text-th-fg"><Highlight text={primaryLabel} query={search} /></span>
+              <ClassHover uri={cls.uri} className="text-base font-semibold text-th-fg"><Highlight text={primaryLabel} query={search} /></ClassHover>
               {/* Additional labels */}
               {allLabels.slice(1).map((lbl, i) => (
                 <span key={i} className="text-xs text-th-fg-3">
                   "{lbl.value}"{lbl.lang ? <span>@{lbl.lang}</span> : null}
                 </span>
               ))}
-              {/* URI on hover */}
-              <span className="hidden font-mono text-xs text-th-fg-4 group-hover:inline">
-                {compact(cls.uri, prefixes)}
-              </span>
             </div>
             {/* Parent classes */}
             {parentLabels.length > 0 && (
               <div className="mt-0.5 flex items-center gap-1">
                 <span className="text-2xs text-th-fg-3">⊆</span>
                 {parentLabels.map((lbl, i) => (
-                  <span key={i} className="text-2xs text-th-fg-3">{lbl}</span>
+                  <ClassHover key={i} uri={cls.subClassOf[i]!} className="text-2xs text-th-fg-3 hover:text-th-fg-2">{lbl}</ClassHover>
                 ))}
               </div>
             )}
@@ -180,9 +177,9 @@ function ClassCard({ cls, properties, defaultExpanded = true, highlighted = fals
                 {(cls.disjointWith ?? []).map((uri, i) => {
                   const disjCls = allClasses.find((c) => c.uri === uri);
                   return (
-                    <span key={i} className="rounded bg-red-100 px-1 text-2xs text-red-800 dark:bg-red-950/40 dark:text-red-400">
+                    <ClassHover key={i} uri={uri} className="rounded bg-red-100 px-1 text-2xs text-red-800 dark:bg-red-950/40 dark:text-red-400">
                       {disjCls?.labels[0]?.value || compact(uri, prefixes)}
-                    </span>
+                    </ClassHover>
                   );
                 })}
               </div>
@@ -329,15 +326,18 @@ function ClassCard({ cls, properties, defaultExpanded = true, highlighted = fals
                   </div>
                   {(cls.restrictions ?? []).map((r, i) => (
                     <div key={i} className="flex items-center gap-2 px-3 py-0.5">
-                      <span className="text-2xs font-medium text-th-fg-2">
+                      <ClassHover uri={r.propertyUri} className="text-2xs font-medium text-th-fg-2">
                         {compact(r.propertyUri, prefixes)}
-                      </span>
+                      </ClassHover>
                       <span className="text-2xs text-th-fg-4 px-1 rounded bg-th-hover border border-th-border-muted font-mono">
                         {r.type}
                       </span>
-                      <span className="text-2xs text-th-fg-3">
-                        {r.value.startsWith("http") ? compact(r.value, prefixes) : r.value}
-                      </span>
+                      {/* Class values (some/all/hasValue) are IRIs; cardinalities are numbers */}
+                      {/Cardinality$/.test(r.type) ? (
+                        <span className="text-2xs text-th-fg-3">{r.value}</span>
+                      ) : (
+                        <ClassHover uri={r.value} className="text-2xs text-th-fg-3">{compact(r.value, prefixes)}</ClassHover>
+                      )}
                     </div>
                   ))}
                 </div>

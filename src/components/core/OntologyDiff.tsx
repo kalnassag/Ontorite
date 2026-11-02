@@ -3,6 +3,7 @@ import { useStore } from "../../lib/store";
 import { diffOntologies, type DiffStatus } from "../../lib/ontology-diff";
 import { compact } from "../../lib/uri-utils";
 import type { OntologyClass, OntologyProperty } from "../../types";
+import ClassHover from "../hover/ClassHover";
 
 const STATUS_LABEL: Record<DiffStatus, string> = {
   added: "Added",
@@ -193,7 +194,7 @@ export default function OntologyDiff() {
                         <span className={`rounded px-1.5 py-0.5 text-2xs font-medium ${BADGE_STYLE[entry.status]}`}>
                           {STATUS_LABEL[entry.status]}
                         </span>
-                        <span className="flex-1 text-xs font-medium">{label}</span>
+                        <ClassHover uri={entry.uri} ontologyId={entry.right ? rightId : leftId} className="flex-1 text-xs font-medium">{label}</ClassHover>
                         <span className="font-mono text-2xs text-th-fg-4">{compact(entry.uri, prefixes)}</span>
                         {(entry.status === "added" || entry.status === "modified") && !applied && (
                           <button
@@ -241,7 +242,7 @@ export default function OntologyDiff() {
                         <span className={`rounded px-1.5 py-0.5 text-2xs font-medium ${BADGE_STYLE[entry.status]}`}>
                           {STATUS_LABEL[entry.status]}
                         </span>
-                        <span className="flex-1 text-xs font-medium">{label}</span>
+                        <ClassHover uri={entry.uri} ontologyId={entry.right ? rightId : leftId} className="flex-1 text-xs font-medium">{label}</ClassHover>
                         <span className="font-mono text-2xs text-th-fg-4">{compact(entry.uri, prefixes)}</span>
                         {(entry.status === "added" || entry.status === "modified") && !applied && (
                           <button

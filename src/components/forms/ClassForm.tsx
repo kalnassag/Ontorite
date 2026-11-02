@@ -8,6 +8,7 @@ import { toPascalCase, compact, expand, buildUri } from "../../lib/uri-utils";
 import LabelEditor from "./LabelEditor";
 import ExtraTripleEditor from "./ExtraTripleEditor";
 import { useClassRefs } from "./useClassRefs";
+import ChipLabel from "./ChipLabel";
 import VocabAutocomplete, { type LocalSuggestion } from "./VocabAutocomplete";
 import type { OntologyClass, LangString, ExtraTriple } from "../../types";
 
@@ -256,7 +257,7 @@ export default function ClassForm({ existing, onDone }: Props) {
                     {subClassOf.map((uri) => {
                       return (
                         <span key={uri} className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-2xs text-blue-800 dark:bg-blue-700/30 dark:text-blue-300">
-                          {refs.classLabel(uri) || uri.split(/[#/]/).pop()}
+                          <ChipLabel uri={uri} label={refs.classLabel(uri) || uri.split(/[#/]/).pop() || uri} />
                           <button onClick={() => toggleParent(uri)} className="opacity-60 hover:opacity-100">×</button>
                         </span>
                       );
@@ -319,7 +320,7 @@ export default function ClassForm({ existing, onDone }: Props) {
                       const cls = parentOptions.find((c) => c.uri === uri);
                       return (
                         <span key={uri} className="flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-2xs text-red-800 dark:bg-red-700/30 dark:text-red-300">
-                          {cls?.labels[0]?.value || cls?.localName || uri.split(/[#/]/).pop()}
+                          <ChipLabel uri={uri} label={cls?.labels[0]?.value || cls?.localName || uri.split(/[#/]/).pop() || uri} />
                           <button onClick={() => toggleDisjoint(uri)} className="opacity-60 hover:opacity-100">×</button>
                         </span>
                       );
