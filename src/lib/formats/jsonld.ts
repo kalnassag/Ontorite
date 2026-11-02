@@ -13,7 +13,7 @@
 import jsonld from "jsonld";
 import { Parser, Writer } from "n3";
 import type { ParseResult } from "../../types";
-import { quadToParsedTriple, type RdfQuad } from "./quad-utils";
+import { quadToParsedTriple, relabelBlankNodes, type RdfQuad } from "./quad-utils";
 
 interface JsonLdRdfDataset {
   subject: { termType: string; value: string };
@@ -24,7 +24,6 @@ interface JsonLdRdfDataset {
 export async function parseJsonLd(text: string): Promise<ParseResult> {
   const triples: ParseResult["triples"] = [];
   const errors: ParseResult["errors"] = [];
-  const blankNodes = new Set<string>();
 
   try {
     const doc = JSON.parse(text);
@@ -36,7 +35,6 @@ export async function parseJsonLd(text: string): Promise<ParseResult> {
         object: q.object as RdfQuad["object"],
       };
       triples.push(quadToParsedTriple(quad));
-      if (q.subject.termType === "BlankNode") blankNodes.add(q.subject.value);
     }
 
     // Best-effort prefix extraction from the top-level @context
@@ -51,13 +49,12 @@ export async function parseJsonLd(text: string): Promise<ParseResult> {
     return {
       prefixes,
       baseUri: "",
-      triples,
+      triples: relabelBlankNodes(triples),
       errors,
-      blankNodeCount: blankNodes.size,
     };
   } catch (err) {
     errors.push({ message: (err as Error).message });
-    return { prefixes: {}, baseUri: "", triples, errors, blankNodeCount: blankNodes.size };
+    return { prefixes: {}, baseUri: "", triples, errors };
   }
 }
 

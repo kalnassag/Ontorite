@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseTurtle, buildModelFromTriples } from '../turtle-parser';
+import { parseTurtle } from '../turtle-parser';
+import { buildModelFromTriples } from '../model-builder';
 import * as fs from 'fs';
 
 describe('Turtle Parser', () => {

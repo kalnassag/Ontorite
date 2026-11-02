@@ -53,6 +53,16 @@ export default {
       fontSize: {
         "2xs": ["0.625rem", { lineHeight: "0.875rem" }],
       },
+      keyframes: {
+        "fade-in": { from: { opacity: "0" }, to: { opacity: "1" } },
+        "expand-in": { from: { opacity: "0", transform: "translateY(-4px)" }, to: { opacity: "1", transform: "none" } },
+        "slide-in-right": { from: { transform: "translateX(100%)" }, to: { transform: "none" } },
+      },
+      animation: {
+        "fade-in": "fade-in 150ms ease-out",
+        "expand-in": "expand-in 150ms ease-out",
+        "slide-in-right": "slide-in-right 200ms ease-out",
+      },
     },
   },
   plugins: [],

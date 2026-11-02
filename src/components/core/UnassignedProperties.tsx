@@ -3,16 +3,17 @@
  * Supports forwardRef so App.tsx can scroll this section into view (U8).
  */
 
-import { forwardRef } from "react";
-import { useStore } from "../../lib/store";
+import { forwardRef, useMemo } from "react";
+import { useStore, selectActiveOntology } from "../../lib/store";
+import { unassignedProperties } from "../../lib/selectors";
 import PropertyRow from "./PropertyRow";
 
 const UnassignedProperties = forwardRef<HTMLDivElement>((_, ref) => {
-  // Select the function reference (stable), call it during render.
-  // Don't call it inside the selector — .filter() returns a new array every time,
-  // which causes Zustand to detect a "change" and infinite-loop.
-  const getUnassignedProperties = useStore((s) => s.getUnassignedProperties);
-  const unassigned = getUnassignedProperties();
+  const activeOntology = useStore(selectActiveOntology);
+  const unassigned = useMemo(
+    () => (activeOntology ? unassignedProperties(activeOntology) : []),
+    [activeOntology],
+  );
 
   if (unassigned.length === 0) return null;
 
@@ -23,12 +24,12 @@ const UnassignedProperties = forwardRef<HTMLDivElement>((_, ref) => {
           Unassigned Properties
         </span>
         <span className="ml-1.5 text-2xs text-th-fg-4">
-          ({unassigned.length} without a domain class)
+          ({unassigned.length} without a domain class — drag one onto a class to assign it)
         </span>
       </div>
       <div className="py-1">
         {unassigned.map((prop) => (
-          <PropertyRow key={prop.id} property={prop} />
+          <PropertyRow key={prop.id} property={prop} draggable />
         ))}
       </div>
     </div>

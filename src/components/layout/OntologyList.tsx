@@ -51,15 +51,21 @@ export default function OntologyList() {
     setImportError("");
     // Try the File System Access API first (Chrome/Edge) — gives us a writable handle
     if (supportsFileSystemAccess()) {
+      let result: Awaited<ReturnType<typeof openTurtleFile>>;
       try {
-        const result = await openTurtleFile();
-        if (!result) return; // user cancelled
-        const id = importOntologyWithHandle(result.text, result.fileName, result.handle);
-        if (import.meta.env.DEV) console.log("[import] success with file handle, ontology id:", id);
-        return;
+        result = await openTurtleFile();
       } catch (err) {
         console.error("[import] File System Access API failed, falling back:", err);
+        fileRef.current?.click();
+        return;
       }
+      if (!result) return; // user cancelled
+      try {
+        importOntologyWithHandle(result.text, result.fileName, result.handle);
+      } catch (err) {
+        setImportError(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return;
     }
 
     // Fallback: classic <input type="file">

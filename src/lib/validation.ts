@@ -15,6 +15,7 @@
 
 import type { Ontology, ValidationIssue } from "../types";
 import { XSD_TYPES } from "./uri-utils";
+import { domainUris } from "./selectors";
 
 const xsdUris = new Set(Object.values(XSD_TYPES));
 
@@ -96,10 +97,8 @@ export function validate(ontology: Ontology): ValidationIssue[] {
       });
     }
 
-    const domainUris = prop.domain.kind === "class"
-      ? (prop.domain.uri ? [prop.domain.uri] : [])
-      : prop.domain.uris;
-    if (domainUris.length === 0) {
+    const domains = domainUris(prop);
+    if (domains.length === 0) {
       issues.push({
         severity: "warning",
         entityId: prop.id,
@@ -108,7 +107,7 @@ export function validate(ontology: Ontology): ValidationIssue[] {
         field: "domain",
       });
     } else {
-      const unknownMembers = domainUris.filter((u) => !classUris.has(u));
+      const unknownMembers = domains.filter((u) => !classUris.has(u));
       if (unknownMembers.length > 0) {
         issues.push({
           severity: "error",

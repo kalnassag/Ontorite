@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { memo, useState, useEffect, useRef } from 'react';
 import { useStore } from "../../lib/store";
+import { useActivePrefixes, useActiveClasses } from "../../lib/store-hooks";
 import { compact } from "../../lib/uri-utils";
-import PropertyRow from './PropertyRow';
+import PropertyRow, { PROPERTY_DRAG_TYPE } from './PropertyRow';
+import Highlight from './Highlight';
 import ClassForm from '../forms/ClassForm';
 import PropertyForm from '../forms/PropertyForm';
 import type { OntologyClass, OntologyProperty } from "../../types";
@@ -18,6 +19,10 @@ interface Props {
   highlighted?: boolean;
   /** Called after deleting this class or one of its properties — for undo toast */
   onDelete?: (label: string) => void;
+  /** Current filter text, highlighted in labels */
+  search?: string;
+  /** Bump to open the add-property form (Ctrl+Shift+N) */
+  addPropertyRequest?: number;
 }
 
 const TYPE_ORDER: Array<'owl:ObjectProperty' | 'owl:DatatypeProperty' | 'owl:AnnotationProperty'> = [
@@ -38,20 +43,51 @@ const TYPE_COLOR: Record<string, string> = {
   'owl:AnnotationProperty': 'text-prop-annotation-500',
 };
 
-export default function ClassCard({ cls, properties, defaultExpanded = true, highlighted = false, onDelete }: Props) {
+function ClassCard({ cls, properties, defaultExpanded = true, highlighted = false, onDelete, search, addPropertyRequest = 0 }: Props) {
   const deleteClass = useStore((s) => s.deleteClass);
   const copyClass = useStore((s) => s.copyClass);
   const pasteClipboard = useStore((s) => s.pasteClipboard);
   const clipboard = useStore((s) => s.clipboard);
   const updateClass = useStore((s) => s.updateClass);
-  // E2: Use stable inline selector instead of getActiveOntology()
-  const activeOntology = useStore((s) => s.ontologies.find(o => o.id === s.activeOntologyId));
+  const prefixes = useActivePrefixes();
+  const allClasses = useActiveClasses();
 
   const cardRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [editingClass, setEditingClass] = useState(false);
   const [addingProperty, setAddingProperty] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const updateProperty = useStore((s) => s.updateProperty);
+
+  useEffect(() => {
+    if (addPropertyRequest === 0) return;
+    setExpanded(true);
+    setEditingClass(false);
+    setAddingProperty(true);
+  }, [addPropertyRequest]);
+
+  // Drop an (unassigned) property here to make this class its domain
+  const isPropertyDrag = (e: React.DragEvent) => e.dataTransfer.types.includes(PROPERTY_DRAG_TYPE);
+  const dropHandlers = {
+    onDragOver: (e: React.DragEvent) => {
+      if (!isPropertyDrag(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      setDragOver(true);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOver(false);
+    },
+    onDrop: (e: React.DragEvent) => {
+      const propertyId = e.dataTransfer.getData(PROPERTY_DRAG_TYPE);
+      setDragOver(false);
+      if (!propertyId) return;
+      e.preventDefault();
+      updateProperty(propertyId, { domain: { kind: "class", uri: cls.uri } });
+      setExpanded(true);
+    },
+  };
   const [showNotes, setShowNotes] = useState(false);
   // E9: Warn before deleting a class with properties
   const [pendingDelete, setPendingDelete] = useState(false);
@@ -70,8 +106,6 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [addingProperty]);
 
-  const prefixes = activeOntology?.metadata.prefixes ?? {};
-  const allClasses = activeOntology?.classes ?? [];
 
   const primaryLabel = cls.labels[0]?.value || cls.localName;
   const allLabels = cls.labels;
@@ -99,8 +133,9 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
   return (
     <div
       ref={cardRef}
-      className={`rounded border bg-th-surface transition-shadow duration-300 ${
-        highlighted ? "border-blue-500 ring-2 ring-blue-500/60" : "border-th-border-muted"
+      {...dropHandlers}
+      className={`rounded border bg-th-surface transition-shadow duration-300 [contain-intrinsic-size:auto_160px] [content-visibility:auto] ${
+        highlighted || dragOver ? "border-blue-500 ring-2 ring-blue-500/60" : "border-th-border-muted"
       }`}
     >
       {/* Header */}
@@ -116,7 +151,7 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
         <div className="group flex min-w-0 flex-1 items-start gap-2 py-1.5 pr-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
-              <span className="text-base font-semibold text-th-fg">{primaryLabel}</span>
+              <span className="text-base font-semibold text-th-fg"><Highlight text={primaryLabel} query={search} /></span>
               {/* Additional labels */}
               {allLabels.slice(1).map((lbl, i) => (
                 <span key={i} className="text-xs text-th-fg-3">
@@ -261,15 +296,8 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
       )}
 
       {/* Expanded body: properties + add-property form */}
-      <AnimatePresence initial={false}>
-        {expanded && !editingClass && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
+              {expanded && !editingClass && (
+          <div className="animate-expand-in motion-reduce:animate-none">
             <div className="border-t border-th-border-muted pb-1">
               {TYPE_ORDER.map((type) => {
                 const group = grouped.get(type) ?? [];
@@ -283,8 +311,9 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
                       <PropertyRow
                         key={prop.id}
                         property={prop}
-                        onDelete={onDelete ? (label) => onDelete(label) : undefined}
+                        onDelete={onDelete}
                         viewedFromClassUri={cls.uri}
+                        search={search}
                       />
                     ))}
                   </div>
@@ -369,9 +398,11 @@ export default function ClassCard({ cls, properties, defaultExpanded = true, hig
                 </div>
               )}
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
     </div>
   );
 }
+
+/** Memoised: App keeps `properties` arrays referentially stable per class. */
+export default memo(ClassCard);

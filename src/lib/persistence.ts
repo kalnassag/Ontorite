@@ -5,8 +5,8 @@
  *   Database: "ontology-editor" (legacy name, retained to preserve existing user data)
  *   Object store: "ontologies" (keyPath: "id")
  *
- * All operations are async. The store should call saveOntology() on every
- * state change (debounced) and loadAll() on startup.
+ * All operations are async. Debouncing and per-ontology scheduling live in
+ * store/internals.ts; this module only talks to IndexedDB.
  */
 
 import { openDB, type IDBPDatabase } from "idb";
@@ -50,16 +50,4 @@ export async function saveOntology(ontology: Ontology): Promise<void> {
 export async function deleteOntology(id: string): Promise<void> {
   const db = await getDb();
   await db.delete(STORE_NAME, id);
-}
-
-/** Utility: debounce a function */
-export function debounce<T extends (...args: unknown[]) => void>(
-  fn: T,
-  ms: number
-): (...args: Parameters<T>) => void {
-  let timer: ReturnType<typeof setTimeout>;
-  return (...args: Parameters<T>) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), ms);
-  };
 }

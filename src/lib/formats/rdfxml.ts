@@ -15,18 +15,16 @@
 import { Parser } from "n3";
 import { RdfXmlParser } from "rdfxml-streaming-parser";
 import type { ParseResult, ParsedTriple } from "../../types";
-import { quadToParsedTriple, type RdfQuad } from "./quad-utils";
+import { quadToParsedTriple, relabelBlankNodes, type RdfQuad } from "./quad-utils";
 
 export async function parseRdfXml(text: string): Promise<ParseResult> {
   const triples: ParsedTriple[] = [];
   const errors: ParseResult["errors"] = [];
-  const blankNodes = new Set<string>();
 
   await new Promise<void>((resolve) => {
     const parser = new RdfXmlParser();
     parser.on("data", (q: RdfQuad) => {
       triples.push(quadToParsedTriple(q));
-      if (q.subject.termType === "BlankNode") blankNodes.add(q.subject.value);
     });
     parser.on("error", (err: Error) => {
       errors.push({ message: err.message });
@@ -39,9 +37,8 @@ export async function parseRdfXml(text: string): Promise<ParseResult> {
   return {
     prefixes: {},
     baseUri: "",
-    triples,
+    triples: relabelBlankNodes(triples),
     errors,
-    blankNodeCount: blankNodes.size,
   };
 }
 

@@ -3,24 +3,21 @@
  * Layout: sidebar (ontology list) + main panel (class/property editor)
  */
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { useStore } from "../../lib/store";
+import { lazy, Suspense, useEffect, useState, useCallback, useMemo, useRef, useDeferredValue } from "react";
+import { useStore, selectActiveOntology, selectCanUndo, selectCanRedo, flushPendingSaves } from "../../lib/store";
 import OntologyList from "./OntologyList";
 import ClassCard from "../core/ClassCard";
 import ClassForm from "../forms/ClassForm";
 import UnassignedProperties from "../core/UnassignedProperties";
 import UnmappedTriplesTable from "../core/UnmappedTriplesTable";
 import ImportExport from "../core/ImportExport";
-import OntologyGraph from "../graph/OntologyGraph";
-import EntityGraph from "../graph/EntityGraph";
-import TreeGraph from "../graph/TreeGraph";
 import IndividualCard from "../core/IndividualCard";
 import ValidationPanel from "../core/ValidationPanel";
 import ClassBrowserPanel from "./ClassBrowserPanel";
-import OntologyDiff from "../core/OntologyDiff";
 import Toast from "./Toast";
 import KeyboardHelp from "./KeyboardHelp";
 import { validate } from "../../lib/validation";
+import { propertiesByDomain as propertiesByDomainOf, unassignedProperties } from "../../lib/selectors";
 import type { OntologyProperty } from "../../types";
 import {
   Plus, Sun, Moon, Network, ChevronsDown, ChevronsUp, Layers, Users,
@@ -29,6 +26,16 @@ import {
   Info, GitFork,
 } from "lucide-react";
 import OntologyMetadataDrawer from "../dialogs/OntologyMetadataDrawer";
+
+// Heavy views are code-split: most sessions start (and stay) in the class list.
+const OntologyGraph = lazy(() => import("../graph/OntologyGraph"));
+const EntityGraph = lazy(() => import("../graph/EntityGraph"));
+const TreeGraph = lazy(() => import("../graph/TreeGraph"));
+const OntologyDiff = lazy(() => import("../core/OntologyDiff"));
+
+const viewFallback = (
+  <div className="flex h-full items-center justify-center text-xs text-th-fg-3">Loading view…</div>
+);
 
 function useTheme() {
   const [dark, setDark] = useState(() => {
@@ -45,17 +52,21 @@ function useTheme() {
   return { dark, toggle: () => setDark((d) => !d) };
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+}
+
 type ViewMode = "classes" | "individuals" | "graph" | "tree" | "entity-graph" | "diff";
 
 export default function App() {
   const init = useStore((s) => s.init);
   const initialized = useStore((s) => s.initialized);
-  // E2: Use stable inline selector instead of getActiveOntology()
-  const activeOntology = useStore((s) => s.ontologies.find(o => o.id === s.activeOntologyId));
+  const activeOntology = useStore(selectActiveOntology);
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
-  const canUndo = useStore((s) => s.canUndo);
-  const canRedo = useStore((s) => s.canRedo);
+  const canUndo = useStore(selectCanUndo);
+  const canRedo = useStore(selectCanRedo);
   const clipboard = useStore((s) => s.clipboard);
   const pasteClipboard = useStore((s) => s.pasteClipboard);
   const clearClipboard = useStore((s) => s.clearClipboard);
@@ -76,11 +87,15 @@ export default function App() {
     return localStorage.getItem("classBrowserCollapsed") === "true";
   });
   // U2: Toast for undo after delete
-  const [toast, setToast] = useState<{ message: string; action: () => void } | null>(null);
+  const [toast, setToast] = useState<{ message: string; action?: () => void } | null>(null);
+  // Ctrl+Shift+N: open the add-property form on a class card
+  const [addPropertyRequest, setAddPropertyRequest] = useState<{ classId: string; n: number } | null>(null);
   // U9: Keyboard shortcut help overlay
   const [showHelp, setShowHelp] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false);
   const theme = useTheme();
+  const selectedClassIdRef = useRef(selectedClassId);
+  selectedClassIdRef.current = selectedClassId;
 
   // U8: Ref for scrolling to unassigned properties
   const unassignedRef = useRef<HTMLDivElement>(null);
@@ -109,41 +124,64 @@ export default function App() {
     return () => clearTimeout(t);
   }, [importWarnings.length, clearImportWarnings]);
 
-  // Global keyboard shortcuts
+  // U2: Toast helper
+  const showToast = useCallback((message: string, action?: () => void) => {
+    setToast({ message, action });
+  }, []);
+  const dismissToast = useCallback(() => setToast(null), []);
+
+  // Global keyboard shortcuts. Undo/redo/new/paste are left to the browser
+  // while typing in a field, so native text undo keeps working.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const ctrl = e.ctrlKey || e.metaKey;
-      if (!ctrl) return;
-      if (e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        if (canUndo()) undo();
-      } else if ((e.key === "y") || (e.key === "z" && e.shiftKey)) {
-        e.preventDefault();
-        if (canRedo()) redo();
-      } else if (e.key === "n" && !e.shiftKey) {
-        // Only trigger new class if not in an input
-        if (document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
-          e.preventDefault();
-          setAddingClass(true);
-          setViewMode("classes");
-        }
-      } else if (e.key === "v") {
-        if (document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
-          if (clipboard) {
-            e.preventDefault();
-            pasteClipboard();
-            setViewMode("classes");
-          }
-        }
-      } else if (e.key === "s") {
-        // E6: Ctrl+S to save to file
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (key === "s") {
         e.preventDefault();
         saveToFile();
+        return;
+      }
+      if (isEditableTarget(e.target)) return;
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (key === "y" || (key === "z" && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      } else if (key === "n" && e.shiftKey) {
+        e.preventDefault();
+        const classId = selectedClassIdRef.current;
+        if (!classId) {
+          showToast("Select a class in the class browser first");
+          return;
+        }
+        setViewMode("classes");
+        setHighlightedClassId(classId);
+        setAddPropertyRequest((prev) => ({ classId, n: (prev?.n ?? 0) + 1 }));
+      } else if (key === "n") {
+        e.preventDefault();
+        setAddingClass(true);
+        setViewMode("classes");
+      } else if (key === "v" && clipboard) {
+        e.preventDefault();
+        pasteClipboard();
+        setViewMode("classes");
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [undo, redo, canUndo, canRedo, clipboard, pasteClipboard, saveToFile]);
+  }, [undo, redo, clipboard, pasteClipboard, saveToFile, showToast]);
+
+  // Write any debounced saves before the tab is hidden or closed.
+  useEffect(() => {
+    const flush = () => { if (document.visibilityState === "hidden") void flushPendingSaves(); };
+    document.addEventListener("visibilitychange", flush);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", flush);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, []);
 
   const toggleExpandAll = useCallback(() => {
     setAllExpanded((prev) => {
@@ -153,31 +191,23 @@ export default function App() {
     });
   }, []);
 
-  // U2: Toast helper
-  const showToast = useCallback((message: string, action: () => void) => {
-    setToast({ message, action });
-  }, []);
+  const handleEntityDeleted = useCallback(
+    (label: string) => showToast(`"${label}" deleted`, undo),
+    [showToast, undo],
+  );
 
-  // E1: Memoize properties-by-domain map at App level
+  // Per-class property lists are kept referentially stable across edits, so the
+  // memoised ClassCards only re-render when their own properties change.
+  const prevPropertiesByDomain = useRef(new Map<string, OntologyProperty[]>());
   const propertiesByDomain = useMemo(() => {
-    const map = new Map<string, OntologyProperty[]>();
-    if (!activeOntology) return map;
-    for (const cls of activeOntology.classes) map.set(cls.id, []);
-    for (const prop of activeOntology.properties) {
-      const uris = prop.domain.kind === "class"
-        ? (prop.domain.uri ? [prop.domain.uri] : [])
-        : prop.domain.uris;
-      for (const u of uris) {
-        const cls = activeOntology.classes.find((c) => c.uri === u);
-        if (cls) {
-          const list = map.get(cls.id) ?? [];
-          list.push(prop);
-          map.set(cls.id, list);
-        }
-      }
+    const next = activeOntology ? propertiesByDomainOf(activeOntology) : new Map<string, OntologyProperty[]>();
+    for (const [classId, list] of next) {
+      const prev = prevPropertiesByDomain.current.get(classId);
+      if (prev && prev.length === list.length && prev.every((p, i) => p === list[i])) next.set(classId, prev);
     }
-    return map;
-  }, [activeOntology?.properties, activeOntology?.classes]); // eslint-disable-line react-hooks/exhaustive-deps
+    prevPropertiesByDomain.current = next;
+    return next;
+  }, [activeOntology?.classes, activeOntology?.properties]); // eslint-disable-line react-hooks/exhaustive-deps -- only these two arrays feed the grouping
 
   // U4: Auto-running validation
   const validationIssues = useMemo(
@@ -185,18 +215,35 @@ export default function App() {
     [activeOntology]
   );
 
-  // U8: Unassigned property count
-  const unassignedCount = useMemo(() => {
-    if (!activeOntology) return 0;
-    const classUris = new Set(activeOntology.classes.map((c) => c.uri));
-    return activeOntology.properties.filter((p) => {
-      const uris = p.domain.kind === "class"
-        ? (p.domain.uri ? [p.domain.uri] : [])
-        : p.domain.uris;
-      if (uris.length === 0) return true;
-      return !uris.some((u) => classUris.has(u));
-    }).length;
-  }, [activeOntology]);
+  const unassignedCount = useMemo(
+    () => (activeOntology ? unassignedProperties(activeOntology).length : 0),
+    [activeOntology],
+  );
+
+  // Filtering/sorting runs against a deferred copy of the query so typing stays
+  // responsive on large ontologies.
+  const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+  const sortedClasses = useMemo(() => {
+    const classes = activeOntology?.classes ?? [];
+    // A class matches on its own labels/local name or on any property nested under it
+    const hit = (localName: string, labels: { value: string }[]) =>
+      localName.toLowerCase().includes(deferredSearch) ||
+      labels.some((l) => l.value.toLowerCase().includes(deferredSearch));
+    const matches = deferredSearch
+      ? classes.filter((cls) =>
+          hit(cls.localName, cls.labels) ||
+          (propertiesByDomain.get(cls.id) ?? []).some((p) => hit(p.localName, p.labels)))
+      : classes;
+    return [...matches].sort((a, b) => a.localName.localeCompare(b.localName));
+  }, [activeOntology?.classes, propertiesByDomain, deferredSearch]);
+  const sortedIndividuals = useMemo(() => {
+    const individuals = activeOntology?.individuals ?? [];
+    const matches = deferredSearch
+      ? individuals.filter((ind) =>
+          ind.localName.toLowerCase().includes(deferredSearch) || ind.uri.toLowerCase().includes(deferredSearch))
+      : individuals;
+    return [...matches].sort((a, b) => a.localName.localeCompare(b.localName));
+  }, [activeOntology?.individuals, deferredSearch]);
 
   if (!initialized) {
     return (
@@ -208,27 +255,6 @@ export default function App() {
 
   const classes = activeOntology?.classes ?? [];
   const individuals = activeOntology?.individuals ?? [];
-  const filteredClasses = search.trim()
-    ? classes.filter((cls) =>
-        cls.labels.some((l) => l.value.toLowerCase().includes(search.toLowerCase())) ||
-        cls.localName.toLowerCase().includes(search.toLowerCase())
-      )
-    : classes;
-
-  const sortedClasses = [...filteredClasses].sort((a, b) =>
-    a.localName.localeCompare(b.localName)
-  );
-
-  const filteredIndividuals = search.trim()
-    ? individuals.filter((ind) =>
-        ind.localName.toLowerCase().includes(search.toLowerCase()) ||
-        ind.uri.toLowerCase().includes(search.toLowerCase())
-      )
-    : individuals;
-
-  const sortedIndividuals = [...filteredIndividuals].sort((a, b) =>
-    a.localName.localeCompare(b.localName)
-  );
 
   // Validation icon for U4
   const hasErrors = validationIssues.some(i => i.severity === "error");
@@ -311,7 +337,8 @@ export default function App() {
               {/* Search */}
               <input
                 type="search"
-                placeholder={viewMode === "individuals" ? "Filter individuals…" : "Filter classes…"}
+                placeholder="Filter…"
+                title={viewMode === "individuals" ? "Filter individuals" : "Filter classes and properties by label or local name"}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-40 rounded bg-th-input px-2 py-1 text-xs text-th-fg placeholder-th-fg-4 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -424,7 +451,7 @@ export default function App() {
               <div className="flex items-center gap-0.5">
                 <button
                   onClick={undo}
-                  disabled={!canUndo()}
+                  disabled={!canUndo}
                   className="rounded px-1.5 py-1 text-2xs text-th-fg-3 hover:bg-th-hover hover:text-th-fg disabled:cursor-not-allowed disabled:opacity-30"
                   title="Undo (Ctrl+Z)"
                 >
@@ -432,7 +459,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={redo}
-                  disabled={!canRedo()}
+                  disabled={!canRedo}
                   className="rounded px-1.5 py-1 text-2xs text-th-fg-3 hover:bg-th-hover hover:text-th-fg disabled:cursor-not-allowed disabled:opacity-30"
                   title="Redo (Ctrl+Y)"
                 >
@@ -540,19 +567,19 @@ export default function App() {
             {/* Content: graph, entity-graph, diff, classes, or individuals */}
             {viewMode === "diff" ? (
               <div className="relative flex-1 overflow-hidden">
-                <OntologyDiff />
+                <Suspense fallback={viewFallback}><OntologyDiff /></Suspense>
               </div>
             ) : viewMode === "graph" ? (
               <div className="relative flex-1 overflow-hidden">
-                <OntologyGraph onClose={() => setViewMode("classes")} />
+                <Suspense fallback={viewFallback}><OntologyGraph onClose={() => setViewMode("classes")} /></Suspense>
               </div>
             ) : viewMode === "tree" ? (
               <div className="relative flex-1 overflow-hidden">
-                <TreeGraph onClose={() => setViewMode("classes")} />
+                <Suspense fallback={viewFallback}><TreeGraph onClose={() => setViewMode("classes")} /></Suspense>
               </div>
             ) : viewMode === "entity-graph" ? (
               <div className="relative flex-1 overflow-hidden">
-                <EntityGraph />
+                <Suspense fallback={viewFallback}><EntityGraph /></Suspense>
               </div>
             ) : viewMode === "individuals" ? (
               <div className="flex-1 overflow-y-auto px-4 py-3">
@@ -632,7 +659,9 @@ export default function App() {
                         properties={propertiesByDomain.get(cls.id) ?? []}
                         defaultExpanded={allExpanded}
                         highlighted={highlightedClassId === cls.id}
-                        onDelete={(label) => showToast(`"${label}" deleted`, undo)}
+                        onDelete={handleEntityDeleted}
+                        search={deferredSearch}
+                        addPropertyRequest={addPropertyRequest?.classId === cls.id ? addPropertyRequest.n : 0}
                       />
                     ))}
                   </div>
@@ -666,9 +695,9 @@ export default function App() {
       {toast && (
         <Toast
           message={toast.message}
-          actionLabel="Undo"
+          actionLabel={toast.action ? "Undo" : undefined}
           onAction={toast.action}
-          onDismiss={() => setToast(null)}
+          onDismiss={dismissToast}
         />
       )}
 

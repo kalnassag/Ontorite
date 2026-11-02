@@ -3,14 +3,18 @@
  * Clicking expands to the full edit form.
  */
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Pencil, Trash2, Clipboard, StickyNote } from "lucide-react";
 import { useStore } from "../../lib/store";
+import { useActivePrefixes, useActiveClasses } from "../../lib/store-hooks";
 import { compact } from "../../lib/uri-utils";
 import PropertyForm from "../forms/PropertyForm";
 import EditorialNotesDrawer from "../dialogs/EditorialNotesDrawer";
 import TimestampFooter from "./TimestampFooter";
 import { classExprFormat } from "../../types";
+import { characteristicsOf, CHARACTERISTICS } from "../../lib/characteristics";
+import { RDF } from "../../lib/vocab";
+import Highlight from "./Highlight";
 import type { OntologyProperty } from "../../types";
 
 interface Props {
@@ -22,7 +26,15 @@ interface Props {
    * chip naming the OTHER member classes for context.
    */
   viewedFromClassUri?: string;
+  /** Current filter text, highlighted in the label */
+  search?: string;
+  /** Allow dragging this row onto a class card to set its domain */
+  draggable?: boolean;
 }
+
+/** MIME type for dragging a property onto a class card. */
+export const PROPERTY_DRAG_TYPE = "application/x-ontorite-property";
+const CHARACTERISTIC_IRIS = new Set(CHARACTERISTICS.map((ch) => ch.iri));
 
 const TYPE_BADGE: Record<OntologyProperty["type"], { label: string; className: string }> = {
   "owl:ObjectProperty": { label: "O", className: "bg-prop-object-700 text-prop-object-100" },
@@ -30,16 +42,15 @@ const TYPE_BADGE: Record<OntologyProperty["type"], { label: string; className: s
   "owl:AnnotationProperty": { label: "A", className: "bg-prop-annotation-700 text-prop-annotation-100" },
 };
 
-export default function PropertyRow({ property, onDelete, viewedFromClassUri }: Props) {
+function PropertyRow({ property, onDelete, viewedFromClassUri, search, draggable = false }: Props) {
   const deleteProperty = useStore((s) => s.deleteProperty);
   const copyProperty = useStore((s) => s.copyProperty);
   const updateProperty = useStore((s) => s.updateProperty);
-  const activeOntology = useStore((s) => s.ontologies.find(o => o.id === s.activeOntologyId));
+  const prefixes = useActivePrefixes();
+  const allClasses = useActiveClasses();
   const [editing, setEditing] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
 
-  const prefixes = activeOntology?.metadata.prefixes ?? {};
-  const allClasses = activeOntology?.classes ?? [];
   const badge = TYPE_BADGE[property.type];
   const primaryLabel = property.labels[0]?.value || property.localName;
   const noteCount = (property.editorialNotes ?? []).filter((n) => n.value).length;
@@ -57,6 +68,9 @@ export default function PropertyRow({ property, onDelete, viewedFromClassUri }: 
     ? property.domain.uris.filter((u) => u !== viewedFromClassUri).map(shortClassUri)
     : [];
   const description = property.descriptions[0]?.value;
+  const characteristics = characteristicsOf(property);
+  const otherExtras = (property.extraTriples ?? []).filter(
+    (et) => !(et.predicate === RDF.type && CHARACTERISTIC_IRIS.has(et.object)));
 
   if (editing) {
     return (
@@ -67,7 +81,15 @@ export default function PropertyRow({ property, onDelete, viewedFromClassUri }: 
   }
 
   return (
-    <div className="group flex items-start gap-1.5 rounded px-2 py-1 hover:bg-th-hover/50">
+    <div
+      className={`group flex items-start gap-1.5 rounded px-2 py-1 hover:bg-th-hover/50 ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
+      draggable={draggable}
+      onDragStart={draggable ? (e) => {
+        e.dataTransfer.setData(PROPERTY_DRAG_TYPE, property.id);
+        e.dataTransfer.effectAllowed = "move";
+      } : undefined}
+      title={draggable ? "Drag onto a class to make it the domain" : undefined}
+    >
       {/* Type badge */}
       <span
         className={`mt-0.5 inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-2xs font-bold ${badge.className}`}
@@ -79,7 +101,16 @@ export default function PropertyRow({ property, onDelete, viewedFromClassUri }: 
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium text-th-fg">{primaryLabel}</span>
+          <span className="text-sm font-medium text-th-fg"><Highlight text={primaryLabel} query={search} /></span>
+          {characteristics.map((ch) => (
+            <span
+              key={ch.iri}
+              className="rounded bg-th-input px-1 font-mono text-2xs text-th-fg-3"
+              title={`owl:${ch.iri.split("#")[1]}`}
+            >
+              {ch.short}
+            </span>
+          ))}
           {rangeLabel && (
             <span className="font-mono text-xs text-th-fg-3">{rangeLabel}</span>
           )}
@@ -106,9 +137,9 @@ export default function PropertyRow({ property, onDelete, viewedFromClassUri }: 
           </div>
         )}
         {/* Extra triples (prov:wasQuotedFrom, etc.) */}
-        {(property.extraTriples ?? []).length > 0 && (
+        {otherExtras.length > 0 && (
           <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
-            {(property.extraTriples ?? []).map((et, i) => (
+            {otherExtras.map((et, i) => (
               <span key={i} className="text-2xs text-th-fg-4">
                 <span className="text-th-fg-3">{compact(et.predicate, prefixes)}</span>
                 {" → "}
@@ -179,3 +210,5 @@ export default function PropertyRow({ property, onDelete, viewedFromClassUri }: 
     </div>
   );
 }
+
+export default memo(PropertyRow);

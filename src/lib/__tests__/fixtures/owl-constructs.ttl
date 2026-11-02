@@ -1,0 +1,57 @@
+@prefix : <http://example.org/onto#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+<http://example.org/onto> a owl:Ontology ;
+    rdfs:label "Constructs"@en , "Konstrukte"@de ;
+    rdfs:comment 'single-quoted comment' ;
+    owl:versionInfo "1.2.0" .
+
+# Property characteristics declared before the property type
+:partOf a owl:TransitiveProperty , owl:ObjectProperty ;
+    rdfs:domain :Part ;
+    rdfs:range :Whole .
+
+:hasId a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain :Part ;
+    rdfs:range xsd:string .
+
+# Two domains (intersection semantics) — the second must survive
+:hasName a owl:DatatypeProperty ;
+    rdfs:domain :Part , :Whole ;
+    rdfs:range xsd:string .
+
+# Union domain + union range
+:connects a owl:ObjectProperty ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Part :Whole ) ] ;
+    rdfs:range [ a owl:Class ; owl:unionOf ( :Part :Whole :Thing ) ] .
+
+:Part a owl:Class ;
+    rdfs:label "Part"@en , "Teil"@de ;
+    rdfs:subClassOf :Thing ,
+        [ a owl:Restriction ; owl:onProperty :partOf ; owl:someValuesFrom :Whole ] ,
+        [ a owl:Restriction ; owl:onProperty :partOf ; owl:cardinality "1"^^xsd:nonNegativeInteger ] ,
+        [ a owl:Restriction ; owl:onProperty :partOf ; owl:qualifiedCardinality "2"^^xsd:nonNegativeInteger ; owl:onClass :Whole ] ;
+    owl:deprecated true ;
+    skos:prefLabel "part"@en .
+
+:Whole a owl:Class ;
+    owl:equivalentClass [ a owl:Class ; owl:intersectionOf ( :Thing [ a owl:Restriction ; owl:onProperty :hasId ; owl:minCardinality 1 ] ) ] ;
+    owl:disjointWith :Part .
+
+:Thing a owl:Class , rdfs:Class .
+
+:Colour a owl:Class ;
+    owl:oneOf ( :red :green ) .
+
+:red a owl:NamedIndividual , :Colour ; :rank 1 ; :weight 2.5 ; :active false .
+:green a :Colour , skos:Concept .
+
+:chain a owl:ObjectProperty ;
+    owl:propertyChainAxiom ( :partOf :partOf ) .
+
+:untyped rdfs:label "no rdf:type here"@en .
+<http://example.org/other/path/Weird%20Thing> rdfs:seeAlso <http://example.org/a(b)> .
