@@ -8,6 +8,7 @@
 import type { Ontology, OntologyProperty, ClassExpression } from "../../types";
 import { RDF, OWL, SKOS, DCT } from "../vocab";
 import { attachBlankNodeClosures } from "../raw-triples";
+import { repairReference } from "../class-refs";
 
 /** Bring a persisted ontology up to the current shape. Mutates in place. */
 export function migrateOntology(onto: Ontology): void {
@@ -40,8 +41,32 @@ export function migrateOntology(onto: Ontology): void {
   sweepLegacyTriples(onto);
   hoistClassExpressions(onto);
   moveHeaderTriples(onto);
+  repairReferences(onto);
   // Blank-node structures referenced from one statement move in with it
   Object.assign(onto, attachBlankNodeClosures(onto));
+}
+
+/**
+ * Older versions stored whatever was typed into a class picker verbatim, so a
+ * range could be the bare text "Vehicle" (exported as the relative IRI
+ * <Vehicle>, never matching the class {base}Vehicle). Resolve such references
+ * to the matching class, or to {base}name; expand known prefixed names.
+ */
+export function repairReferences(onto: Ontology): void {
+  const ctx = { classes: onto.classes, baseUri: onto.metadata.baseUri, prefixes: onto.metadata.prefixes };
+  const fix = (uri: string) => (uri ? repairReference(uri, ctx) : uri);
+  const fixExpr = (expr: ClassExpression): ClassExpression =>
+    expr.kind === "class" ? { kind: "class", uri: fix(expr.uri) } : { kind: "union", uris: expr.uris.map(fix) };
+  for (const cls of onto.classes) {
+    cls.subClassOf = cls.subClassOf.map(fix);
+    cls.disjointWith = cls.disjointWith.map(fix);
+  }
+  for (const prop of onto.properties) {
+    prop.domain = fixExpr(prop.domain);
+    prop.ranges = prop.ranges.map(fixExpr);
+    prop.subPropertyOf = prop.subPropertyOf.map(fix);
+    if (prop.inverseOf) prop.inverseOf = fix(prop.inverseOf);
+  }
 }
 
 /**

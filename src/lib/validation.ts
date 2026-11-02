@@ -16,6 +16,7 @@
 import type { Ontology, ValidationIssue } from "../types";
 import { XSD_TYPES } from "./uri-utils";
 import { domainUris } from "./selectors";
+import { isAbsoluteIri } from "./class-refs";
 
 const xsdUris = new Set(Object.values(XSD_TYPES));
 
@@ -30,6 +31,19 @@ export function validate(ontology: Ontology): ValidationIssue[] {
   const baseUri = ontology.metadata.baseUri;
   const missingClass = (uri: string) => !classUris.has(uri) && !!baseUri && uri.startsWith(baseUri);
   const missingProperty = (uri: string) => !propUris.has(uri) && !!baseUri && uri.startsWith(baseUri);
+  // Every reference must be an absolute IRI — a bare name would export as a relative IRI
+  const checkIri = (uri: string, entityId: string, entityType: "class" | "property", field: string) => {
+    if (uri && !uri.startsWith("_:") && !isAbsoluteIri(uri)) {
+      issues.push({ severity: "error", entityId, entityType, field, message: `${field} "${uri}" is not an IRI` });
+    }
+  };
+  for (const cls of ontology.classes) {
+    [...cls.subClassOf, ...cls.disjointWith].forEach((u) => checkIri(u, cls.id, "class", "subClassOf"));
+  }
+  for (const prop of ontology.properties) {
+    domainUris(prop).forEach((u) => checkIri(u, prop.id, "property", "domain"));
+    prop.ranges.flatMap((r) => (r.kind === "class" ? [r.uri] : r.uris)).forEach((u) => checkIri(u, prop.id, "property", "ranges"));
+  }
 
   // Ontology-level
   if (!ontology.metadata.baseUri) {

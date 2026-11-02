@@ -23,3 +23,14 @@ describe("validate — external references", () => {
     expect(messages).toContain("rdfs:subClassOf references unknown class: http://ex.org/Missing");
   });
 });
+
+describe("validate — references must be IRIs", () => {
+  it("errors on a bare name stored as a range", () => {
+    const onto = load(`@prefix : <http://ex.org/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+<http://ex.org/onto> a owl:Ontology .
+:p a owl:ObjectProperty .`);
+    onto.properties[0]!.ranges = [{ kind: "class", uri: "Vehicle" }];
+    expect(validate(onto).some((i) => i.severity === "error" && i.message === 'ranges "Vehicle" is not an IRI')).toBe(true);
+  });
+});

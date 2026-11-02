@@ -11,6 +11,7 @@ import ExtraTripleEditor from "./ExtraTripleEditor";
 import CharacteristicsEditor from "./CharacteristicsEditor";
 import { CHARACTERISTICS, hasCharacteristic } from "../../lib/characteristics";
 import VocabAutocomplete, { type LocalSuggestion } from "./VocabAutocomplete";
+import { useClassRefs } from "./useClassRefs";
 import { classExprFormat } from "../../types";
 import type { OntologyProperty, LangString, PropertyType, ExtraTriple, ClassExpression } from "../../types";
 
@@ -84,6 +85,8 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
   );
 
   const allClasses = activeOntology?.classes ?? [];
+  // Typed class names resolve to IRIs; unknown ones become new classes created on save
+  const refs = useClassRefs(allClasses, baseUri, prefixes);
   const allProperties = activeOntology?.properties ?? [];
   const sameTypeProps = allProperties.filter(
     (p) => p.type === propType && (!existing || p.id !== existing.id)
@@ -97,8 +100,8 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
     r.kind === "class" ? `c:${r.uri}` : `u:${[...r.uris].sort().join("|")}`;
   const formatRangeChip = (r: ClassExpression): string => {
     const friendly = (u: string) => {
-      const cls = allClasses.find((c) => c.uri === u);
-      if (cls) return cls.labels[0]?.value || cls.localName;
+      const label = refs.classLabel(u);
+      if (label) return label;
       const xsd = Object.entries(XSD_TYPES).find(([, v]) => v === u)?.[0];
       if (xsd) return xsd;
       return u.split(/[#/]/).pop() || u;
@@ -107,11 +110,16 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
   };
   const rangeHasUri = (uri: string): boolean =>
     ranges.some((r) => r.kind === "class" ? r.uri === uri : r.uris.includes(uri));
-  const addSingleRange = (uri: string) => {
-    const v = uri.trim();
-    if (!v || rangeHasUri(v)) return;
-    setRanges((prev) => [...prev, { kind: "class", uri: v }]);
+  const addSingleRange = (uri: string | null) => {
+    if (!uri || rangeHasUri(uri)) return;
+    setRanges((prev) => [...prev, { kind: "class", uri }]);
     setRangeInput("");
+  };
+  const addClassRange = (text: string) => addSingleRange(refs.resolveClass(text, "range"));
+  const addValueRange = (text: string) => addSingleRange(refs.resolveValue(text, "range"));
+  const addDomain = (text: string) => {
+    const uri = refs.resolveClass(text, "domain");
+    if (uri && !domainUris.includes(uri)) setDomainUris((prev) => [...prev, uri]);
   };
   const removeRangeEntry = (target: ClassExpression) => {
     const k = rangeKey(target);
@@ -176,10 +184,12 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
       extraTriples: expandedTriples,
     };
 
+    // Create any classes typed into the domain / range pickers, in the same undo step
+    const newClasses = refs.newClassesFor([...domainUris, ...ranges.flatMap((r) => (r.kind === "class" ? [r.uri] : r.uris))]);
     if (existing) {
-      updateProperty(existing.id, data);
+      updateProperty(existing.id, data, { newClasses });
     } else {
-      addProperty(data);
+      addProperty(data, { newClasses });
     }
     onDone();
   };
@@ -299,8 +309,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
           {domainUris.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {domainUris.map((uri) => {
-                const cls = allClasses.find((c) => c.uri === uri);
-                const label = cls?.labels[0]?.value || cls?.localName || uri.split(/[#/]/).pop();
+                const label = refs.classLabel(uri) || uri.split(/[#/]/).pop();
                 return (
                   <span
                     key={uri}
@@ -320,10 +329,8 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
           <VocabAutocomplete
             value=""
             onChange={() => { /* per-keystroke noise — ignore */ }}
-            onPick={(val) => {
-              const v = val.trim();
-              if (v && !domainUris.includes(v)) setDomainUris((prev) => [...prev, v]);
-            }}
+            onPick={addDomain}
+            onCreate={addDomain}
             filter={{ kinds: ["class"] }}
             localEntries={allClasses
               .filter((c) => !domainUris.includes(c.uri))
@@ -335,6 +342,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
               }))}
             placeholder={domainUris.length === 0 ? "Pick a domain class (type to search)…" : "+ Add another class (creates a union)…"}
           />
+          {refs.errorFor("domain") && <p className="text-2xs text-red-400">{refs.errorFor("domain")}</p>}
         </div>
       </div>
 
@@ -372,7 +380,8 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
             <VocabAutocomplete
               value={rangeInput}
               onChange={setRangeInput}
-              onPick={addSingleRange}
+              onPick={addClassRange}
+              onCreate={addClassRange}
               filter={{ kinds: ["class"] }}
               localEntries={allClasses
                 .filter((c) => !rangeHasUri(c.uri))
@@ -407,7 +416,7 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
             <VocabAutocomplete
               value={rangeInput}
               onChange={setRangeInput}
-              onPick={addSingleRange}
+              onPick={addValueRange}
               filter={{ kinds: ["datatype"] }}
               placeholder="Add XSD type (type to search)…"
             />
@@ -433,18 +442,20 @@ export default function PropertyForm({ existing, defaultDomainUri, onDone }: Pro
             <VocabAutocomplete
               value={rangeInput}
               onChange={setRangeInput}
-              onPick={addSingleRange}
+              onPick={addValueRange}
               localEntries={allClasses.map((c): LocalSuggestion => ({
                 uri: c.uri,
                 localName: c.localName,
                 label: c.labels[0]?.value ?? c.localName,
                 kind: "class",
               }))}
-              placeholder="URI or free text, press Enter to add"
+              placeholder="Class, datatype or IRI — Enter to add"
             />
           </div>
         )}
       </div>
+
+      {refs.errorFor("range") && <p className="-mt-2 text-2xs text-red-400">{refs.errorFor("range")}</p>}
 
       {/* subPropertyOf */}
       {sameTypeProps.length > 0 && (
