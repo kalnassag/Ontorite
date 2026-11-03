@@ -11,7 +11,6 @@ import { parseTurtle } from "../turtle-parser";
 import { buildModelFromTriples } from "../model-builder";
 import { serializeToTurtle } from "../turtle-serializer";
 import { STANDARD_PREFIXES } from "../uri-utils";
-import { COMMON_ONTOLOGIES } from "../common-ontologies";
 import type { Ontology } from "../../types";
 
 async function canonical(turtle: string): Promise<string> {
@@ -47,7 +46,6 @@ const cases: Array<[string, string]> = [
   ["fixtures/gist-style.ttl", fixture("gist-style.ttl")],
   ["docs/sample.ttl", doc("sample.ttl")],
   ["docs/onepiece-ontology.ttl", doc("onepiece-ontology.ttl")],
-  ...COMMON_ONTOLOGIES.map((o): [string, string] => [`library: ${o.name}`, o.turtle]),
 ];
 
 describe("round-trip fidelity", () => {

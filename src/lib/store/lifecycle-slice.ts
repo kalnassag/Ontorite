@@ -7,6 +7,7 @@ import { loadAllOntologies, saveOntology, deleteOntology as dbDelete } from "../
 import { STANDARD_PREFIXES } from "../uri-utils";
 import { parseTurtle } from "../turtle-parser";
 import { buildModelFromTriples } from "../model-builder";
+import { baseUriFor, getSettings } from "../settings";
 import { detectFormat, parseToTriples } from "../formats";
 import { setHandle, removeHandle, hasHandle } from "../file-access";
 import { migrateOntology } from "./migrations";
@@ -32,7 +33,7 @@ export function prefixConflicts(filePrefixes: Record<string, string>): string[] 
 
 function newOntology(meta: Partial<OntologyMetadata>): Ontology {
   const now = new Date().toISOString();
-  const baseUri = meta.baseUri || "http://example.org/ontology/";
+  const baseUri = meta.baseUri || baseUriFor(meta.ontologyLabel || "ontology");
   return {
     id: genId(),
     metadata: {
@@ -47,8 +48,8 @@ function newOntology(meta: Partial<OntologyMetadata>): Ontology {
       editorialNotes: meta.editorialNotes || [],
       created: meta.created ?? now,
       modified: meta.modified ?? now,
-      prefixes: { ...STANDARD_PREFIXES, ...meta.prefixes },
-      defaultLanguage: meta.defaultLanguage || "en",
+      prefixes: { ...STANDARD_PREFIXES, ...getSettings().newOntology.prefixes, ...meta.prefixes },
+      defaultLanguage: meta.defaultLanguage ?? getSettings().newOntology.defaultLanguage,
     },
     classes: [],
     properties: [],
@@ -147,6 +148,8 @@ export const lifecycleSlice: Slice<LifecycleKeys> = (set, get, { commit, persist
         metadata: {
           ...model.metadata,
           ontologyLabel: model.metadata.ontologyLabel || fallbackLabel,
+          // The file doesn't say which language to tag new labels with: use the setting
+          defaultLanguage: getSettings().newOntology.defaultLanguage,
           prefixes: { ...STANDARD_PREFIXES, ...model.metadata.prefixes },
         },
         classes: model.classes,

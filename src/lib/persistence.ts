@@ -70,6 +70,13 @@ export interface StoredReference {
   /** Hint for the parser: a file name or URL with an extension, or a content type */
   formatHint: string;
   fetchedAt: string;
+  /** The catalogue entry it was added from, if any (lib/references/catalog.ts) */
+  catalogId?: string;
+  /** Display name and prefix (from the catalogue); otherwise derived from the ontology */
+  name?: string;
+  prefix?: string;
+  /** false = kept in the library but not used for definitions (default: used) */
+  enabled?: boolean;
 }
 
 export async function loadAllReferences(): Promise<StoredReference[]> {

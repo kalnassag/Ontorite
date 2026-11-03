@@ -12,15 +12,13 @@ import { useStore, selectActiveOntology } from "../../lib/store";
 import { backDefinition, closeDefinition, followDefinition, useDefinitionDrawer } from "../../lib/hover-card";
 import { findDefinition, formatDefinition, summarizeTerm, type ReferenceSource } from "../../lib/references/reference-source";
 import { useReferences, workspaceSource } from "../../lib/references/reference-store";
-import { COMMON_ONTOLOGIES } from "../../lib/common-ontologies";
 import { compact, STANDARD_PREFIXES } from "../../lib/uri-utils";
 import { useReferenceSources } from "./useReferenceSources";
 import LinkedTurtle from "./LinkedTurtle";
 import FindDefinition from "./FindDefinition";
 
 const SOURCE_KIND: Record<ReferenceSource["kind"], string> = {
-  reference: "cached reference",
-  library: "built-in library",
+  reference: "your library",
   workspace: "open in the workspace",
 };
 
@@ -30,7 +28,6 @@ export default function DefinitionDrawer() {
   const active = useStore(selectActiveOntology);
   const setActiveOntology = useStore((s) => s.setActiveOntology);
   const importOntologyAsync = useStore((s) => s.importOntologyAsync);
-  const importOntology = useStore((s) => s.importOntology);
   const stored = useReferences((s) => s.stored);
   const others = useReferenceSources();
 
@@ -44,9 +41,6 @@ export default function DefinitionDrawer() {
   const openSource = async (source: ReferenceSource) => {
     if (source.kind === "workspace") {
       setActiveOntology(source.id.replace(/^workspace:/, ""));
-    } else if (source.kind === "library") {
-      const lib = COMMON_ONTOLOGIES.find((l) => `library:${l.id}` === source.id);
-      if (lib) importOntology(lib.turtle, `${lib.id}.ttl`, { recordFileName: false });
     } else {
       const record = stored.find((r) => r.id === source.id);
       if (record) await importOntologyAsync(record.text, record.origin.split("/").pop() || record.formatHint);

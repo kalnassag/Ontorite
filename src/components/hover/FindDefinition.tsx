@@ -6,10 +6,12 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Check, FileUp, Globe, Loader2, X } from "lucide-react";
-import { resolveTerm, useReferences, type ResolveStep } from "../../lib/references/reference-store";
+import { Check, ExternalLink, FileUp, Globe, Loader2, X } from "lucide-react";
+import { libraryEntryFor, useReferences, type AddOptions } from "../../lib/references/reference-store";
+import { resolveTerm, type ResolveStep } from "../../lib/references/resolve-term";
 import { candidateUrls } from "../../lib/references/reference-fetch";
-import { namespace } from "../../lib/uri-utils";
+import { catalogEntryFor } from "../../lib/references/catalog";
+import { openSettings } from "../../lib/settings";
 
 const OUTCOME_TEXT: Record<ResolveStep["outcome"], string> = {
   found: "found it",
@@ -22,6 +24,7 @@ const OUTCOME_TEXT: Record<ResolveStep["outcome"], string> = {
 
 export default function FindDefinition({ uri, imports }: { uri: string; imports: string[] }) {
   const stored = useReferences((s) => s.stored);
+  const sources = useReferences((s) => s.sources);
   const addFromText = useReferences((s) => s.addFromText);
   const fetchInto = useReferences((s) => s.fetchInto);
   const [steps, setSteps] = useState<ResolveStep[]>([]);
@@ -30,8 +33,12 @@ export default function FindDefinition({ uri, imports }: { uri: string; imports:
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Where a manually loaded file is filed: the first import not loaded yet, else the term's namespace
-  const target = imports.find((i) => !stored.some((r) => r.iri === i)) ?? namespace(uri);
+  // A known ontology (catalogue) is filed under its own name; else under the first import not loaded yet
+  const entry = catalogEntryFor(uri);
+  const pendingImport = imports.find((i) => !libraryEntryFor(i, stored, sources));
+  const addOptions: AddOptions = entry
+    ? { iri: entry.ontologyIri, catalogId: entry.id, name: entry.name, prefix: entry.prefix }
+    : pendingImport ? { iri: pendingImport } : {};
   const [url, setUrl] = useState(() => candidateUrls(uri, imports)[0] ?? "");
 
   useEffect(() => {
@@ -48,7 +55,7 @@ export default function FindDefinition({ uri, imports }: { uri: string; imports:
     setManualError(null);
     setBusy(true);
     try {
-      await addFromText(target, await file.text(), file.name, file.name);
+      await addFromText(await file.text(), file.name, file.name, addOptions);
     } catch (err) {
       setManualError(`${file.name}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -59,7 +66,7 @@ export default function FindDefinition({ uri, imports }: { uri: string; imports:
   const loadUrl = async () => {
     setManualError(null);
     setBusy(true);
-    const outcome = await fetchInto(url.trim(), target);
+    const outcome = await fetchInto(url.trim(), addOptions);
     setBusy(false);
     if (!outcome.ok) setManualError(`${outcome.url}: ${outcome.message}`);
   };
@@ -67,7 +74,7 @@ export default function FindDefinition({ uri, imports }: { uri: string; imports:
   return (
     <div className="space-y-3 text-xs">
       <p className="text-th-fg-3">
-        This term isn&apos;t defined in this ontology, the others you have open, or the built-in library.
+        This term isn&apos;t defined in this ontology, the others you have open, or your library.
         {searching ? " Looking for it…" : ""}
       </p>
 
@@ -92,9 +99,14 @@ export default function FindDefinition({ uri, imports }: { uri: string; imports:
         <div className="space-y-2 rounded border border-th-border-muted p-2.5">
           <p className="font-medium text-th-fg-2">Load the ontology that defines it</p>
           <p className="text-2xs text-th-fg-4">
-            It&apos;s kept as a read-only reference (not added to your workspace), filed under{" "}
-            <span className="break-all font-mono">{target}</span>, and reused for every term it defines.
+            It&apos;s added to your library as a read-only reference (not to your workspace) and reused for every term it defines.
+            {entry && <> This term is from <span className="font-medium text-th-fg-3">{entry.name}</span>.</>}
           </p>
+          {entry && (
+            <a href={entry.homepage} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-2xs text-blue-700 hover:underline dark:text-blue-400">
+              <ExternalLink size={10} /> Get {entry.name} from its homepage
+            </a>
+          )}
           <div className="flex items-center gap-2">
             <button
               onClick={() => fileRef.current?.click()}
@@ -129,6 +141,9 @@ export default function FindDefinition({ uri, imports }: { uri: string; imports:
             Tip: a direct link to the file often works when the ontology&apos;s own address is blocked — e.g. a raw GitHub URL.
           </p>
           {manualError && <p className="text-2xs text-red-600 dark:text-red-400">{manualError}</p>}
+          <button onClick={() => openSettings("library")} className="text-2xs text-th-fg-3 hover:text-th-fg hover:underline">
+            Manage your library…
+          </button>
         </div>
       )}
     </div>

@@ -26,7 +26,8 @@ import { useReferences } from "../../lib/references/reference-store";
 import { validate } from "../../lib/validation";
 import { propertiesByDomain as propertiesByDomainOf, unassignedProperties } from "../../lib/selectors";
 import type { OntologyProperty } from "../../types";
-import { Plus, Sun, Moon, X, AlertTriangle, HelpCircle } from "lucide-react";
+import { Plus, Sun, Moon, X, AlertTriangle, HelpCircle, Settings } from "lucide-react";
+import { applyDisplaySettings, openSettings, useSettings } from "../../lib/settings";
 import OntologyMetadataDrawer from "../dialogs/OntologyMetadataDrawer";
 
 // Heavy views are code-split: most sessions start (and stay) in the class list.
@@ -34,25 +35,31 @@ const OntologyGraph = lazy(() => import("../graph/OntologyGraph"));
 const EntityGraph = lazy(() => import("../graph/EntityGraph"));
 const TreeGraph = lazy(() => import("../graph/TreeGraph"));
 const OntologyDiff = lazy(() => import("../core/OntologyDiff"));
+const SettingsDrawer = lazy(() => import("../settings/SettingsDrawer"));
 const SourceView = lazy(() => import("../source/SourceEditor").then((m) => ({ default: m.SourceView })));
 
 const viewFallback = (
   <div className="flex h-full items-center justify-center text-xs text-th-fg-3">Loading view…</div>
 );
 
-function useTheme() {
-  const [dark, setDark] = useState(() => {
-    const stored = localStorage.getItem("theme");
-    if (stored) return stored === "dark";
-    return true; // default dark
-  });
+/** Apply display settings (theme, text size, contrast, motion) and follow the OS theme when asked. */
+function useDisplaySettings() {
+  const settings = useSettings((s) => s.settings);
+  const update = useSettings((s) => s.update);
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? true);
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-    localStorage.setItem("theme", dark ? "dark" : "light");
-  }, [dark]);
+    const query = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!query) return;
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
 
-  return { dark, toggle: () => setDark((d) => !d) };
+  useEffect(() => applyDisplaySettings(settings, systemDark), [settings, systemDark]);
+
+  const dark = settings.theme === "dark" || (settings.theme === "system" && systemDark);
+  return { dark, toggle: () => update({ theme: dark ? "light" : "dark" }) };
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -92,7 +99,8 @@ export default function App() {
   // U9: Keyboard shortcut help overlay
   const [showHelp, setShowHelp] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false);
-  const theme = useTheme();
+  const theme = useDisplaySettings();
+  const settingsOpen = useSettings((s) => s.openTab !== null);
   // Side panes are resizable; widths are remembered per device
   const ontologyPane = usePaneWidth("pane:ontologies", 192, 140, 420);
   const browserPane = usePaneWidth("pane:classBrowser", 240, 160, 560);
@@ -140,6 +148,11 @@ export default function App() {
     const handler = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.altKey || e.defaultPrevented) return;
       const key = e.key.toLowerCase();
+      if (key === ",") {
+        e.preventDefault();
+        openSettings();
+        return;
+      }
       if (key === "s") {
         e.preventDefault();
         saveToFile();
@@ -283,6 +296,7 @@ export default function App() {
             onClick={() => setShowHelp(v => !v)}
             className="ml-auto rounded p-1 text-th-fg-3 hover:text-th-fg"
             title="Keyboard shortcuts"
+            aria-label="Keyboard shortcuts"
           >
             <HelpCircle size={13} />
           </button>
@@ -290,8 +304,17 @@ export default function App() {
             onClick={theme.toggle}
             className="rounded p-1 text-th-fg-3 hover:text-th-fg"
             title={theme.dark ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={theme.dark ? "Switch to light mode" : "Switch to dark mode"}
           >
             {theme.dark ? <Sun size={13} /> : <Moon size={13} />}
+          </button>
+          <button
+            onClick={() => openSettings()}
+            className="rounded p-1 text-th-fg-3 hover:text-th-fg"
+            title="Settings (Ctrl+,)"
+            aria-label="Settings"
+          >
+            <Settings size={13} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -520,6 +543,7 @@ export default function App() {
       {/* The one hover card for class / property names anywhere in the app */}
       <HoverCardHost />
       <DefinitionDrawer />
+      {settingsOpen && <Suspense fallback={null}><SettingsDrawer /></Suspense>}
     </div>
   );
 }

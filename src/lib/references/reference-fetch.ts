@@ -16,6 +16,13 @@ export type FetchOutcome =
   | { ok: true; text: string; url: string; formatHint: string }
   | { ok: false; url: string; reason: "blocked" | "http" | "not-rdf"; message: string };
 
+/** The documents a term's namespace may resolve to (with and without a trailing #). */
+export function namespaceUrls(termUri: string): string[] {
+  const ns = namespace(termUri);
+  const nsDoc = ns.endsWith("#") ? ns.slice(0, -1) : ns;
+  return [...new Set([nsDoc, ns].filter((u) => /^https?:\/\//i.test(u)))];
+}
+
 /**
  * URLs worth trying for a term, most specific first: the active ontology's
  * owl:imports (a term's namespace often isn't its ontology's address — gist's
@@ -23,10 +30,7 @@ export type FetchOutcome =
  * then the term's own namespace document.
  */
 export function candidateUrls(termUri: string, imports: string[]): string[] {
-  const ns = namespace(termUri);
-  const nsDoc = ns.endsWith("#") ? ns.slice(0, -1) : ns;
-  const urls = [...imports, nsDoc, ns].filter((u) => /^https?:\/\//i.test(u));
-  return [...new Set(urls)];
+  return [...new Set([...imports.filter((u) => /^https?:\/\//i.test(u)), ...namespaceUrls(termUri)])];
 }
 
 export async function fetchOntology(url: string): Promise<FetchOutcome> {
@@ -34,6 +38,9 @@ export async function fetchOntology(url: string): Promise<FetchOutcome> {
   try {
     response = await fetch(url, { headers: { Accept: ACCEPT }, redirect: "follow" });
   } catch {
+    if (/^http:/i.test(url) && typeof location !== "undefined" && location.protocol === "https:") {
+      return { ok: false, url, reason: "blocked", message: "Browsers don't load http:// addresses from an https:// page. Download the file and load it instead." };
+    }
     return {
       ok: false, url, reason: "blocked",
       message: "The server didn't let the browser read it (no CORS permission), or it's unreachable.",

@@ -238,7 +238,7 @@ export function buildModelFromTriples(parsed: ParseResult): BuiltModel {
     extraTriples: [],
     editorialNotes: [],
     prefixes,
-    defaultLanguage: "en",
+    defaultLanguage: "",
   };
   const unmappedTriples: UnmappedTriple[] = [];
   const keepUnmapped = (t: ParsedTriple) => unmappedTriples.push({
