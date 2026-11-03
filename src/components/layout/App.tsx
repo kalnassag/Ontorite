@@ -21,6 +21,8 @@ import { usePaneWidth } from "./usePaneWidth";
 import ErrorBoundary from "./ErrorBoundary";
 import ViewLoadError from "./ViewLoadError";
 import HoverCardHost from "../hover/HoverCardHost";
+import DefinitionDrawer from "../hover/DefinitionDrawer";
+import { useReferences } from "../../lib/references/reference-store";
 import { validate } from "../../lib/validation";
 import { propertiesByDomain as propertiesByDomainOf, unassignedProperties } from "../../lib/selectors";
 import type { OntologyProperty } from "../../types";
@@ -110,6 +112,8 @@ export default function App() {
   }, []);
 
   useEffect(() => { init(); }, [init]);
+  // Cached external ontologies (imports, dcat, …) for term definitions
+  useEffect(() => { void useReferences.getState().init(); }, []);
 
   useEffect(() => {
     if (!highlightedClassId) return;
@@ -515,6 +519,7 @@ export default function App() {
       <OntologyMetadataDrawer open={showMetadata} onClose={() => setShowMetadata(false)} />
       {/* The one hover card for class / property names anywhere in the app */}
       <HoverCardHost />
+      <DefinitionDrawer />
     </div>
   );
 }

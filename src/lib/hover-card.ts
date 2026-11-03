@@ -54,3 +54,31 @@ export function dismissHoverCard() {
   clearTimeout(hideTimer);
   if (useHoverCard.getState().target) useHoverCard.setState({ target: null });
 }
+
+// ── Definition drawer (full definition of a term, e.g. from an imported ontology) ──
+
+interface DefinitionState {
+  /** Terms viewed, most recent last — clicking a term inside a definition pushes it */
+  stack: string[];
+}
+
+export const useDefinitionDrawer = create<DefinitionState>(() => ({ stack: [] }));
+
+/** Open the definition of `uri` (from the hover card), starting a fresh trail. */
+export function openDefinition(uri: string) {
+  dismissHoverCard();
+  useDefinitionDrawer.setState({ stack: [uri] });
+}
+
+/** Follow a term referenced inside the open definition. */
+export function followDefinition(uri: string) {
+  useDefinitionDrawer.setState((s) => (s.stack[s.stack.length - 1] === uri ? s : { stack: [...s.stack, uri] }));
+}
+
+export function backDefinition() {
+  useDefinitionDrawer.setState((s) => ({ stack: s.stack.slice(0, -1) }));
+}
+
+export function closeDefinition() {
+  useDefinitionDrawer.setState({ stack: [] });
+}

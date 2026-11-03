@@ -114,10 +114,18 @@ Each property has:
    anchoring in the model — a possible follow-up, not a reason to make text the
    source of truth.
 
-6. **Imports are recorded, not loaded.** `owl:imports` is edited in the metadata
-   drawer and exported as full IRIs, but imported ontologies aren't fetched.
-   Validation therefore only reports unknown references inside the ontology's own
-   namespace; terms from other namespaces are assumed to be imported/external.
+6. **Imports are references, never merged.** `owl:imports` is edited in the metadata
+   drawer and exported as full IRIs. An import (or any vocabulary — gist, dcat,
+   dcterms…) can be *loaded as a read-only reference* (`lib/references/`): cached in
+   IndexedDB as its original text, used only to show external terms' definitions
+   (hover card + Definition drawer). Lookup is by subject IRI across: other open
+   ontologies → cached references → the built-in library. A term's namespace is often
+   not its ontology's address (gist: terms under `…/ns/ontology/gist/`, ontology at
+   `…/ontology/gistCore`), so fetching tries the imports first, then the namespace.
+   There's no backend: when a server blocks browser reads (CORS) the user loads the
+   file or a direct URL instead. Labels/descriptions are read from RDFS, SKOS, DC and
+   schema.org predicates (gist uses `skos:prefLabel` / `skos:definition`). Validation
+   still only reports unknown references inside the ontology's own namespace.
 
 5. **Property cardinality is OWL restrictions on the wire.** `min/max/exactCardinality`
    on a property serialize as a restriction on each domain class (`owl:Thing` if
@@ -144,7 +152,9 @@ src/
     graph/    OntologyGraph (force), TreeGraph (hierarchy), EntityGraph (neighbourhood)
     source/   SourceEditor (Turtle editing view), turtle-editor-setup (CodeMirror config)
     hover/    ClassHover (wrap any class / property name) + HoverCardHost (the single
-              app-wide hover card, mounted once in App; state in lib/hover-card.ts).
+              app-wide hover card, mounted once in App; state in lib/hover-card.ts),
+              DefinitionDrawer (a term's full definition from its source, as linked
+              Turtle; FindDefinition fetches / loads it when it isn't loaded yet).
               Wrap new places that render a class/property name in ClassHover rather
               than adding `title=` attributes or per-component popovers.
   lib/
@@ -157,6 +167,9 @@ src/
     source-apply.ts       reconcile edited Turtle into the model (Source view)
     turtle-comments.ts    find `#` comments (outside IRIs/strings) to warn about
     class-refs.ts         resolve picker text to class IRIs; create unknown classes
+    references/           read-only external ontologies for term definitions:
+                          reference-source (index, summarise, format), reference-fetch
+                          (candidate URLs, CORS-aware fetch), reference-store (cache + lookup)
     formats/              JSON-LD / RDF/XML / N-Triples adapters (lazy-loaded)
     store.ts              Zustand store, composed from store/*-slice.ts
     store/                internals.ts (commit: undo + persistence), migrations.ts, slices

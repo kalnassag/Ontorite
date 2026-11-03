@@ -44,6 +44,7 @@ const doc = (name: string) =>
 
 const cases: Array<[string, string]> = [
   ["fixtures/owl-constructs.ttl", fixture("owl-constructs.ttl")],
+  ["fixtures/gist-style.ttl", fixture("gist-style.ttl")],
   ["docs/sample.ttl", doc("sample.ttl")],
   ["docs/onepiece-ontology.ttl", doc("onepiece-ontology.ttl")],
   ...COMMON_ONTOLOGIES.map((o): [string, string] => [`library: ${o.name}`, o.turtle]),
