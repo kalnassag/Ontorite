@@ -6,7 +6,8 @@ import { useRef, useState } from "react";
 import { Plus, Upload, Trash2, ChevronRight, X, Globe, BookOpen, Check, FileText } from "lucide-react";
 import { useStore } from "../../lib/store";
 import { supportsFileSystemAccess, openTurtleFile } from "../../lib/file-access";
-import { COMMON_ONTOLOGIES } from "../../lib/common-ontologies";
+import { useReferences } from "../../lib/references/reference-store";
+import { baseUriFor, openSettings } from "../../lib/settings";
 
 interface NewOntologyForm {
   label: string;
@@ -19,7 +20,6 @@ export default function OntologyList() {
   const setActiveOntology = useStore((s) => s.setActiveOntology);
   const createOntology = useStore((s) => s.createOntology);
   const deleteOntology = useStore((s) => s.deleteOntology);
-  const importOntology = useStore((s) => s.importOntology);
   const importOntologyAsync = useStore((s) => s.importOntologyAsync);
   const importOntologyWithHandle = useStore((s) => s.importOntologyWithHandle);
 
@@ -33,7 +33,9 @@ export default function OntologyList() {
   const [urlError, setUrlError] = useState("");
   const [urlLoading, setUrlLoading] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
-  const [loadedLibraryIds, setLoadedLibraryIds] = useState<Set<string>>(new Set());
+  const [openedLibraryIds, setOpenedLibraryIds] = useState<Set<string>>(new Set());
+  const libraryRecords = useReferences((s) => s.stored);
+  const librarySources = useReferences((s) => s.sources);
   const [importError, setImportError] = useState("");
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
@@ -41,7 +43,7 @@ export default function OntologyList() {
     if (!form.label.trim()) return;
     createOntology({
       ontologyLabel: form.label.trim(),
-      baseUri: form.baseUri.trim() || `http://example.org/${form.label.toLowerCase().replace(/\s+/g, "-")}/`,
+      baseUri: form.baseUri.trim() || baseUriFor(form.label),
     });
     setForm({ label: "", baseUri: "" });
     setCreating(false);
@@ -140,7 +142,8 @@ export default function OntologyList() {
         <button
           onClick={() => { setShowLibrary((v) => !v); setImportingUrl(false); }}
           className="rounded p-1.5 text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
-          title="Common ontology library"
+          title="Your library"
+          aria-label="Your library"
         >
           <BookOpen size={13} />
         </button>
@@ -212,7 +215,7 @@ export default function OntologyList() {
           />
           <input
             type="text"
-            placeholder="Base URI (optional)"
+            placeholder={form.label.trim() ? baseUriFor(form.label) : "Base URI (optional)"}
             value={form.baseUri}
             onChange={(e) => setForm((f) => ({ ...f, baseUri: e.target.value }))}
             onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); if (e.key === "Escape") setCreating(false); }}
@@ -235,38 +238,40 @@ export default function OntologyList() {
         </div>
       )}
 
-      {/* Common ontology library */}
+      {/* Your library: open an editable copy of an ontology kept in Settings → Library */}
       {showLibrary && (
         <div className="border-b border-th-border-muted bg-th-base">
           <div className="flex items-center justify-between px-2 py-1.5">
-            <span className="text-2xs font-semibold uppercase tracking-wide text-th-fg-3">Common Ontologies</span>
-            <button onClick={() => setShowLibrary(false)} className="rounded p-0.5 text-th-fg-4 hover:text-th-fg"><X size={11} /></button>
+            <span className="text-2xs font-semibold uppercase tracking-wide text-th-fg-3">Your library</span>
+            <button onClick={() => setShowLibrary(false)} className="rounded p-0.5 text-th-fg-4 hover:text-th-fg" aria-label="Close library"><X size={11} /></button>
           </div>
-          {COMMON_ONTOLOGIES.map((onto) => (
-            <div key={onto.id} className="border-t border-th-border-muted px-2 py-1.5">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-xs font-medium text-th-fg">{onto.name}</div>
-                  <div className="text-2xs text-th-fg-4 leading-snug mt-0.5">{onto.description}</div>
-                </div>
-                {loadedLibraryIds.has(onto.id) ? (
-                  <span className="flex flex-shrink-0 items-center gap-1 text-2xs text-green-600 dark:text-green-400">
-                    <Check size={11} /> Loaded
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => {
-                      importOntology(onto.turtle, `${onto.id}.ttl`, { recordFileName: false });
-                      setLoadedLibraryIds((prev) => new Set([...prev, onto.id]));
-                    }}
-                    className="flex-shrink-0 rounded bg-blue-700 px-2 py-0.5 text-2xs font-medium text-white hover:bg-blue-600"
-                  >
-                    Load
-                  </button>
-                )}
-              </div>
+          {libraryRecords.length === 0 && (
+            <p className="border-t border-th-border-muted px-2 py-1.5 text-2xs leading-snug text-th-fg-4">
+              Nothing in your library yet. Add the ontologies you use (gist, DCAT, DCTERMS…) to see their definitions and open copies here.
+            </p>
+          )}
+          {libraryRecords.map((record) => (
+            <div key={record.id} className="flex items-center justify-between gap-2 border-t border-th-border-muted px-2 py-1">
+              <span className="min-w-0 truncate text-xs text-th-fg" title={record.iri}>{record.name || librarySources.find((s) => s.id === record.id)?.name || record.iri}</span>
+              {openedLibraryIds.has(record.id) ? (
+                <span className="flex flex-shrink-0 items-center gap-1 text-2xs text-green-700 dark:text-green-400"><Check size={11} /> Opened</span>
+              ) : (
+                <button
+                  onClick={async () => {
+                    await importOntologyAsync(record.text, record.origin.split("/").pop() || record.formatHint);
+                    setOpenedLibraryIds((prev) => new Set([...prev, record.id]));
+                  }}
+                  className="flex-shrink-0 rounded bg-blue-700 px-2 py-0.5 text-2xs font-medium text-white hover:bg-blue-600"
+                  title="Open an editable copy in the workspace"
+                >
+                  Open
+                </button>
+              )}
             </div>
           ))}
+          <button onClick={() => openSettings("library")} className="w-full border-t border-th-border-muted px-2 py-1.5 text-left text-2xs text-blue-700 hover:bg-th-hover dark:text-blue-400">
+            Add or manage ontologies…
+          </button>
         </div>
       )}
 

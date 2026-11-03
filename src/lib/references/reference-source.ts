@@ -2,8 +2,8 @@
  * Definitions of terms from other ontologies (owl:imports, dcterms, dcat, …).
  *
  * A ReferenceSource is any read-only collection of triples a term can be
- * looked up in: a cached external ontology, the built-in library, or another
- * ontology open in the workspace. Lookups are by subject IRI, so a term is
+ * looked up in: an ontology in the user's library (lib/references/catalog +
+ * reference-store), or another ontology open in the workspace. Lookups are by subject IRI, so a term is
  * found wherever it's defined, whatever namespace / ontology IRI it uses
  * (gist's terms live in …/ns/ontology/gist/ but its ontology is …/ontology/gistCore).
  */
@@ -13,7 +13,7 @@ import { STANDARD_PREFIXES } from "../uri-utils";
 import { createNodeRenderer, createTermFormatter, formatBlock, formatLiteral } from "../turtle-format";
 import { NS, RDF, RDFS, OWL } from "../vocab";
 
-export type SourceKind = "reference" | "library" | "workspace";
+export type SourceKind = "reference" | "workspace";
 
 export interface ReferenceSource {
   id: string;
@@ -24,6 +24,8 @@ export interface ReferenceSource {
   iri: string;
   /** Where it came from (URL or file name), for display */
   origin: string;
+  /** Subjects typed owl:Ontology in it (to match owl:imports IRIs) */
+  ontologyIris: string[];
   prefixes: Record<string, string>;
   /** Triples grouped by subject */
   bySubject: Map<string, ParsedTriple[]>;
@@ -31,7 +33,7 @@ export interface ReferenceSource {
 }
 
 export function buildSource(
-  meta: { id: string; kind: SourceKind; iri: string; origin: string },
+  meta: { id: string; kind: SourceKind; iri: string; origin: string; name?: string },
   triples: ParsedTriple[],
   prefixes: Record<string, string>,
 ): ReferenceSource {
@@ -41,11 +43,12 @@ export function buildSource(
     if (list) list.push(t);
     else bySubject.set(t.s, [t]);
   }
-  const ontologyIri = triples.find((t) => t.p === RDF.type && t.o === OWL.Ontology)?.s;
-  const ontologyLabel = ontologyIri ? pickLiteral(bySubject.get(ontologyIri) ?? [], LABEL_PREDICATES) : undefined;
+  const ontologyIris = [...new Set(triples.filter((t) => t.p === RDF.type && t.o === OWL.Ontology && !t.s.startsWith("_:")).map((t) => t.s))];
+  const ontologyLabel = ontologyIris[0] ? pickLiteral(bySubject.get(ontologyIris[0]) ?? [], LABEL_PREDICATES) : undefined;
   return {
     ...meta,
-    name: ontologyLabel?.value || meta.iri || meta.origin,
+    ontologyIris,
+    name: meta.name || ontologyLabel?.value || meta.iri || meta.origin,
     prefixes,
     bySubject,
     tripleCount: triples.length,

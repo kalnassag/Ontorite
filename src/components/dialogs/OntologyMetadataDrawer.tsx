@@ -70,12 +70,13 @@ export default function OntologyMetadataDrawer({ open, onClose }: Props) {
           />
         </Field>
 
-        <Field label="Default language" hint="Used for new labels you add. Not auto-applied.">
+        <Field label="Default language" hint="Tag for new labels you add in this ontology; empty = untagged. Existing labels are never changed.">
           <input
             type="text"
             value={md.defaultLanguage}
-            onChange={(e) => updateMetadata({ defaultLanguage: e.target.value })}
-            placeholder="en"
+            onChange={(e) => updateMetadata({ defaultLanguage: e.target.value.trim() })}
+            placeholder="none"
+            aria-label="Default language"
             className="w-16 rounded bg-th-input px-2 py-1 text-xs text-th-fg focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </Field>

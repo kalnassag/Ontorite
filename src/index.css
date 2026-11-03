@@ -77,6 +77,62 @@
     background: #3b82f6;
     color: white;
   }
+
+  /* ── Accessibility (Settings → Display & accessibility) ───────────── */
+
+  /* Higher contrast: secondary text and edges move closer to the main text.
+     Applied when the setting says "always", or the OS asks for more contrast. */
+  html.contrast-more {
+    --th-fg-2: #334155;
+    --th-fg-3: #475569;
+    --th-fg-4: #64748b;
+    --th-border: #94a3b8;
+    --th-border-muted: #cbd5e1;
+    --th-input-border: #64748b;
+  }
+  html.contrast-more.dark {
+    --th-fg-2: #e2e8f0;
+    --th-fg-3: #cbd5e1;
+    --th-fg-4: #94a3b8;
+    --th-border: #64748b;
+    --th-border-muted: #475569;
+    --th-input-border: #94a3b8;
+  }
+  @media (prefers-contrast: more) {
+    html:not(.dark) {
+      --th-fg-2: #334155;
+      --th-fg-3: #475569;
+      --th-fg-4: #64748b;
+      --th-border: #94a3b8;
+      --th-border-muted: #cbd5e1;
+      --th-input-border: #64748b;
+    }
+    html.dark {
+      --th-fg-2: #e2e8f0;
+      --th-fg-3: #cbd5e1;
+      --th-fg-4: #94a3b8;
+      --th-border: #64748b;
+      --th-border-muted: #475569;
+      --th-input-border: #94a3b8;
+    }
+  }
+
+  /* Reduced motion forced on in Settings (the OS setting is honoured by
+     motion-reduce: variants already) */
+  html.reduce-motion *,
+  html.reduce-motion *::before,
+  html.reduce-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Keyboard focus is always visible (mouse clicks don't show it) */
+  :where(button, a, summary, [role="button"], [role="tab"], [tabindex]):focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 1px;
+  }
 }
 
 @layer components {

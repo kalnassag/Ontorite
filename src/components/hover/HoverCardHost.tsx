@@ -72,7 +72,7 @@ function describe(uri: string, onto: Ontology | undefined, sources: ReferenceSou
   if (uri.startsWith(NS.xsd) || uri.startsWith(NS.rdf + "langString")) {
     return { kind: "datatype", badge: "Datatype", badgeClass: "bg-prop-datatype-700/30 text-prop-datatype-500", title: compact(uri, prefixes), labels: [], descriptions: [], facts: [] };
   }
-  // Defined in an imported / library / other open ontology?
+  // Defined in your library or another open ontology?
   const found = findDefinition(uri, sources);
   if (found) {
     const summary = summarizeTerm(found.triples);
@@ -188,7 +188,7 @@ export default function HoverCardHost() {
           : <p className="text-2xs italic text-th-fg-4">No description in the source</p>
       )}
       {info.kind === "external" && (
-        <p className="text-2xs text-th-fg-4">Defined elsewhere — not in this ontology, the others you have open, or the library. Find definition looks in this ontology&apos;s imports and the term&apos;s namespace.</p>
+        <p className="text-2xs text-th-fg-4">Defined elsewhere — not in this ontology, the others you have open, or your library. Find definition looks in this ontology&apos;s imports, the catalogue of common ontologies, and the term&apos;s namespace.</p>
       )}
 
       {info.facts.length > 0 && (

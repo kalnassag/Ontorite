@@ -115,13 +115,17 @@ Each property has:
    source of truth.
 
 6. **Imports are references, never merged.** `owl:imports` is edited in the metadata
-   drawer and exported as full IRIs. An import (or any vocabulary — gist, dcat,
-   dcterms…) can be *loaded as a read-only reference* (`lib/references/`): cached in
-   IndexedDB as its original text, used only to show external terms' definitions
-   (hover card + Definition drawer). Lookup is by subject IRI across: other open
-   ontologies → cached references → the built-in library. A term's namespace is often
-   not its ontology's address (gist: terms under `…/ns/ontology/gist/`, ontology at
-   `…/ontology/gistCore`), so fetching tries the imports first, then the namespace.
+   drawer and exported as full IRIs. External ontologies (gist, dcat, dcterms…) live
+   in the user's **library** (`lib/references/`, Settings → Library): read-only,
+   kept in IndexedDB as their original text, used only to show external terms'
+   definitions (hover card + Definition drawer). **Nothing is bundled** — the user
+   adds what they use from a catalogue (`catalog.ts`: metadata + download URLs,
+   raw GitHub first where the publisher keeps a copy), from a file or link, or via
+   Find definition. Lookup is by subject IRI across: other open ontologies → the
+   library (entries switched off are skipped). A term's namespace is often not its
+   ontology's address (gist: terms under `…/ns/ontology/gist/`, ontology at
+   `…/ontology/gistCore`), so Find definition tries the imports, then the catalogue
+   entry for the namespace, then the namespace itself.
    There's no backend: when a server blocks browser reads (CORS) the user loads the
    file or a direct URL instead. Labels/descriptions are read from RDFS, SKOS, DC and
    schema.org predicates (gist uses `skos:prefLabel` / `skos:definition`). Validation
@@ -149,6 +153,8 @@ src/
     forms/    ClassForm, PropertyForm, LabelEditor, ExtraTripleEditor, ImportsEditor,
               CharacteristicsEditor, VocabAutocomplete
     dialogs/  OntologyMetadataDrawer, EditorialNotesDrawer, CreateEntityDialog, CreateEdgeDialog
+    settings/ SettingsDrawer (lazy; tabs: Library, New ontologies, Display &
+              accessibility, Data), LibrarySettings + LibraryCatalog, Choice
     graph/    OntologyGraph (force), TreeGraph (hierarchy), EntityGraph (neighbourhood)
     source/   SourceEditor (Turtle editing view), turtle-editor-setup (CodeMirror config)
     hover/    ClassHover (wrap any class / property name) + HoverCardHost (the single
@@ -167,9 +173,12 @@ src/
     source-apply.ts       reconcile edited Turtle into the model (Source view)
     turtle-comments.ts    find `#` comments (outside IRIs/strings) to warn about
     class-refs.ts         resolve picker text to class IRIs; create unknown classes
-    references/           read-only external ontologies for term definitions:
-                          reference-source (index, summarise, format), reference-fetch
-                          (candidate URLs, CORS-aware fetch), reference-store (cache + lookup)
+    references/           the user's library of read-only external ontologies:
+                          catalog (common ontologies to add), reference-source (index,
+                          summarise, format), reference-fetch (CORS-aware fetch),
+                          reference-store (library + lookup), resolve-term (Find definition)
+    settings.ts           app settings (localStorage): display, accessibility, defaults
+                          for new ontologies; applied to <html> before first paint
     formats/              JSON-LD / RDF/XML / N-Triples adapters (lazy-loaded)
     store.ts              Zustand store, composed from store/*-slice.ts
     store/                internals.ts (commit: undo + persistence), migrations.ts, slices
@@ -193,8 +202,8 @@ src/
 ## Testing
 
 - `npm test` runs Vitest; `npm run lint` and `npx tsc -b` must be clean.
-- `src/lib/__tests__/roundtrip.test.ts` requires every fixture, `docs/*.ttl` file and
-  library ontology to be **graph-isomorphic** (RDFC-1.0) after import → export, and the
+- `src/lib/__tests__/roundtrip.test.ts` requires every fixture and `docs/*.ttl` file
+  to be **graph-isomorphic** (RDFC-1.0) after import → export, and the
   export to be stable. Add a fixture whenever you touch parsing or serialization.
 
 ## Feature Requirements (Priority Order)
@@ -320,6 +329,13 @@ The serializer in `src/lib/turtle-serializer.ts` must produce:
   Tailwind colours with an explicit `dark:` pair (e.g. `text-amber-800 dark:text-amber-300`).
   Never a dark-only shade like `text-amber-300` on its own — it washes out in light mode.
   Text inputs get a visible border from the base layer (`--th-input-border`).
+- **Accessible by default.** Icon-only buttons get an `aria-label`; single choices use
+  `settings/Choice` (a radio group with arrow keys); drawers take and return focus.
+  Keyboard focus is outlined globally (`:focus-visible` in `index.css`) — don't remove
+  it. Text sizes are `rem` so Settings' text size scales them (avoid `text-[Npx]`).
+  Animations must also stop under `html.reduce-motion` (handled globally for CSS
+  animations/transitions); the contrast setting only remaps `--th-*` variables, so
+  colours that bypass them won't follow it.
 
 ## Coding Standards
 
@@ -345,18 +361,17 @@ The serializer in `src/lib/turtle-serializer.ts` must produce:
    helpers in `raw-triples.ts` (`addRawTriples`, `freshenExtras`,
    `renameIriInRawTriples`) rather than editing those arrays by hand.
 4. **Don't auto-assign language tags.** PoolParty's blanket `@en` tagging is
-   a known antipattern. Only tag with a language when the user explicitly sets one.
+   a known antipattern. Only tag with a language when the user explicitly sets one:
+   new labels use the ontology's `defaultLanguage`, which is empty (untagged) unless
+   the user sets it in the metadata drawer or Settings → New ontologies.
 5. **Prefix collisions.** When importing, merge prefixes with existing ones.
    Flag conflicts (same prefix, different URI) to the user.
 
 ## Known Tech Debt
 
 - Files over the 300-line guideline: `OntologyGraph.tsx`, `EntityGraph.tsx`,
-  `App.tsx`, `PropertyForm.tsx`, `TreeGraph.tsx` (and the `common-ontologies.ts` data
-  file, which is fine). The three graph views duplicate pan/zoom/hover logic and
+  `App.tsx`, `PropertyForm.tsx`, `TreeGraph.tsx`, `OntologyList.tsx`. The three graph views duplicate pan/zoom/hover logic and
   should share a core.
 - The empty domain is the sentinel `{ kind: "class", uri: "" }`; use `domainUris()` /
   `hasDomain()` from `selectors.ts` rather than inspecting it directly.
-- New labels are tagged with the ontology's `defaultLanguage` (shown and editable in
-  the label editor). Revisit if this conflicts with pitfall 4.
 

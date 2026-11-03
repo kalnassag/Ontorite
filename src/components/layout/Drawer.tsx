@@ -3,7 +3,7 @@
  * panel and per-entity editorial-notes panels.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 
 interface Props {
@@ -17,6 +17,16 @@ interface Props {
 }
 
 export default function Drawer({ open, onClose, title, subtitle, width = 420, children }: Props) {
+  const panelRef = useRef<HTMLElement>(null);
+
+  // Keyboard users land in the drawer, and return where they were when it closes
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+    return () => previous?.focus?.();
+  }, [open]);
+
   // Esc closes
   useEffect(() => {
     if (!open) return;
@@ -36,10 +46,13 @@ export default function Drawer({ open, onClose, title, subtitle, width = 420, ch
         className="fixed inset-0 z-40 animate-fade-in bg-black/30 motion-reduce:animate-none"
       />
       <aside
+        ref={panelRef}
         role="dialog"
+        aria-modal="true"
         aria-label={title}
-        style={{ width }}
-        className="fixed inset-y-0 right-0 z-50 flex animate-slide-in-right flex-col border-l border-th-border bg-th-base shadow-2xl motion-reduce:animate-none"
+        tabIndex={-1}
+        style={{ width, maxWidth: "100vw" }}
+        className="fixed outline-none inset-y-0 right-0 z-50 flex animate-slide-in-right flex-col border-l border-th-border bg-th-base shadow-2xl motion-reduce:animate-none"
       >
         <header className="flex items-start gap-2 border-b border-th-border px-4 py-3">
           <div className="min-w-0 flex-1">
@@ -52,6 +65,7 @@ export default function Drawer({ open, onClose, title, subtitle, width = 420, ch
             onClick={onClose}
             className="rounded p-1 text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
             title="Close (Esc)"
+            aria-label="Close"
           >
             <X size={14} />
           </button>
