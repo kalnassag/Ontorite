@@ -102,7 +102,7 @@ export default function OntologyMetadataDrawer({ open, onClose }: Props) {
 
         <Field
           label="owl:imports"
-          hint="Recorded and exported, but imported ontologies aren't loaded — their terms are treated as external."
+          hint="Load an import to see its terms' definitions (labels, descriptions, axioms) in hover cards and the Definition panel. Loaded copies are read-only references, kept on this device."
         >
           <ImportsEditor
             imports={md.imports ?? []}

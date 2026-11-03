@@ -1,0 +1,31 @@
+# A small ontology in the style of gist (skos:prefLabel / skos:definition,
+# nested blank-node axioms). Written for these tests — not gist itself.
+@prefix ex: <https://example.org/ns/ontology/core/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<https://example.org/ontology/core> a owl:Ontology ;
+    skos:prefLabel "Example core"^^xsd:string .
+
+ex:Organization a owl:Class ;
+    skos:prefLabel "Organization"^^xsd:string ;
+    skos:definition "A structured entity formed to achieve goals."^^xsd:string ;
+    owl:disjointWith ex:Person .
+
+ex:Person a owl:Class ;
+    skos:prefLabel "Person"@en , "Person"@de ;
+    skos:definition "A human being."@en .
+
+ex:Category a owl:Class ;
+    skos:prefLabel "Category" ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty ex:isAllocatedBy ;
+        owl:someValuesFrom [ a owl:Class ; owl:unionOf ( ex:Organization ex:Person ) ] ;
+    ] .
+
+ex:isAllocatedBy a owl:ObjectProperty ;
+    skos:prefLabel "is allocated by" ;
+    rdfs:range ex:Organization .

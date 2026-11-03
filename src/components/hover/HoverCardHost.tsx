@@ -7,14 +7,16 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Copy } from "lucide-react";
+import { Check, ChevronRight, Copy } from "lucide-react";
 import type { LangString, Ontology } from "../../types";
 import { useStore, selectActiveOntology } from "../../lib/store";
-import { dismissHoverCard, hideHoverCard, keepHoverCard, useHoverCard } from "../../lib/hover-card";
+import { dismissHoverCard, hideHoverCard, keepHoverCard, openDefinition, useHoverCard } from "../../lib/hover-card";
 import { compact, STANDARD_PREFIXES } from "../../lib/uri-utils";
 import { classExprFormat } from "../../types";
 import { NS } from "../../lib/vocab";
 import { domainUris } from "../../lib/selectors";
+import { findDefinition, labelFor, summarizeTerm, type ReferenceSource } from "../../lib/references/reference-source";
+import { useReferenceSources } from "./useReferenceSources";
 
 const WIDTH = 360;
 const GAP = 6;
@@ -22,6 +24,7 @@ const GAP = 6;
 type Described =
   | { kind: "class" | "property"; badge: string; badgeClass: string; title: string; labels: LangString[]; descriptions: LangString[]; facts: Array<[string, string]> }
   | { kind: "individual"; badge: string; badgeClass: string; title: string; labels: []; descriptions: []; facts: Array<[string, string]> }
+  | { kind: "referenced"; badge: string; badgeClass: string; title: string; labels: []; descriptions: LangString[]; facts: Array<[string, string]>; sourceName: string }
   | { kind: "datatype" | "external"; badge: string; badgeClass: string; title: string; labels: []; descriptions: []; facts: [] };
 
 const PROPERTY_BADGE: Record<string, [string, string]> = {
@@ -30,7 +33,7 @@ const PROPERTY_BADGE: Record<string, [string, string]> = {
   "owl:AnnotationProperty": ["Annotation property", "bg-prop-annotation-700 text-prop-annotation-100"],
 };
 
-function describe(uri: string, onto: Ontology | undefined): Described {
+function describe(uri: string, onto: Ontology | undefined, sources: ReferenceSource[]): Described {
   const prefixes = { ...STANDARD_PREFIXES, ...(onto?.metadata.prefixes ?? {}) };
   const name = (u: string) => {
     const cls = onto?.classes.find((c) => c.uri === u);
@@ -69,7 +72,23 @@ function describe(uri: string, onto: Ontology | undefined): Described {
   if (uri.startsWith(NS.xsd) || uri.startsWith(NS.rdf + "langString")) {
     return { kind: "datatype", badge: "Datatype", badgeClass: "bg-prop-datatype-700/30 text-prop-datatype-500", title: compact(uri, prefixes), labels: [], descriptions: [], facts: [] };
   }
-  return { kind: "external", badge: "Not defined here", badgeClass: "bg-th-hover text-th-fg-3", title: compact(uri, prefixes), labels: [], descriptions: [], facts: [] };
+  // Defined in an imported / library / other open ontology?
+  const found = findDefinition(uri, sources);
+  if (found) {
+    const summary = summarizeTerm(found.triples);
+    const refName = (u: string) => name(u) !== compact(u, prefixes) ? name(u) : labelFor(u, sources) ?? compact(u, prefixes);
+    return {
+      kind: "referenced",
+      badge: summary.kind ?? "Term",
+      badgeClass: "bg-blue-600/15 text-blue-700 dark:text-blue-400",
+      title: summary.label || compact(uri, prefixes),
+      labels: [],
+      descriptions: summary.description ? [{ value: summary.description, lang: "" }] : [],
+      facts: summary.facts.map(([k, uris]) => [k, uris.map(refName).join(", ")]),
+      sourceName: found.source.name,
+    };
+  }
+  return { kind: "external", badge: "Not loaded", badgeClass: "bg-th-hover text-th-fg-3", title: compact(uri, prefixes), labels: [], descriptions: [], facts: [] };
 }
 
 export default function HoverCardHost() {
@@ -77,6 +96,7 @@ export default function HoverCardHost() {
   const active = useStore(selectActiveOntology);
   const ontologies = useStore((s) => s.ontologies);
   const ontology = (target?.ontologyId && ontologies.find((o) => o.id === target.ontologyId)) || active;
+  const sources = useReferenceSources();
   const cardRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -108,7 +128,7 @@ export default function HoverCardHost() {
   }, [target]);
 
   if (!target) return null;
-  const info = describe(target.uri, ontology);
+  const info = describe(target.uri, ontology, sources);
   const prefixes = { ...STANDARD_PREFIXES, ...(ontology?.metadata.prefixes ?? {}) };
   const short = compact(target.uri, prefixes);
   const otherLabels = info.labels.slice(1);
@@ -162,8 +182,13 @@ export default function HoverCardHost() {
           <p className="text-2xs italic text-th-fg-4">No description (rdfs:comment)</p>
         )
       )}
+      {info.kind === "referenced" && (
+        descriptions.length > 0
+          ? <p className="whitespace-pre-line leading-snug text-th-fg-2">{descriptions[0]!.value}</p>
+          : <p className="text-2xs italic text-th-fg-4">No description in the source</p>
+      )}
       {info.kind === "external" && (
-        <p className="text-2xs text-th-fg-4">Not a class or property of this ontology — from an import or an external vocabulary.</p>
+        <p className="text-2xs text-th-fg-4">Defined elsewhere — not in this ontology, the others you have open, or the library. Find definition looks in this ontology&apos;s imports and the term&apos;s namespace.</p>
       )}
 
       {info.facts.length > 0 && (
@@ -175,6 +200,18 @@ export default function HoverCardHost() {
             </div>
           ))}
         </dl>
+      )}
+
+      {info.kind !== "datatype" && (
+        <div className="flex items-center justify-between border-t border-th-border-muted pt-1.5 text-2xs">
+          <span className="truncate text-th-fg-4">{info.kind === "referenced" ? `From ${info.sourceName}` : ""}</span>
+          <button
+            onClick={() => openDefinition(target.uri)}
+            className="flex flex-shrink-0 items-center gap-0.5 rounded px-1.5 py-0.5 font-medium text-blue-600 hover:bg-th-hover dark:text-blue-400"
+          >
+            {info.kind === "external" ? "Find definition" : "Definition"} <ChevronRight size={11} />
+          </button>
+        </div>
       )}
     </div>,
     document.body,
