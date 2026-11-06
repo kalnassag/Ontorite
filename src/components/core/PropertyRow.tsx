@@ -73,7 +73,7 @@ function PropertyRow({ property, onDelete, viewedFromClassUri, search, draggable
 
   if (editing) {
     return (
-      <div className="ml-4 mt-1">
+      <div className="ml-4 mt-1" data-entity-uri={property.uri}>
         <PropertyForm existing={property} onDone={() => setEditing(false)} />
       </div>
     );
@@ -81,6 +81,7 @@ function PropertyRow({ property, onDelete, viewedFromClassUri, search, draggable
 
   return (
     <div
+      data-entity-uri={property.uri}
       className={`group flex items-start gap-1.5 rounded px-2 py-1 hover:bg-th-hover/50 ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
       draggable={draggable}
       onDragStart={draggable ? (e) => {

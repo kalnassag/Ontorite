@@ -508,12 +508,12 @@ export default function EntityGraph() {
   return (
     <div className="flex h-full flex-col bg-th-base" ref={containerRef}>
       {/* Toolbar */}
-      <div className="flex flex-shrink-0 items-center gap-2 border-b border-th-border px-3 py-2">
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-th-border px-3 py-2">
         <h3 className="text-xs font-semibold text-th-fg">Entity Graph</h3>
 
         {/* Legend */}
         {legendEntries.length > 0 && (
-          <div className="ml-3 flex items-center gap-3">
+          <div className="ml-3 flex flex-wrap items-center gap-x-3 gap-y-1">
             {legendEntries.map(({ label, color }) => (
               <span key={label} className="flex items-center gap-1 text-2xs text-th-fg-3">
                 <span

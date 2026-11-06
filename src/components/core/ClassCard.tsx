@@ -135,6 +135,7 @@ function ClassCard({ cls, properties, defaultExpanded = true, highlighted = fals
   return (
     <div
       ref={cardRef}
+      data-entity-uri={cls.uri}
       {...dropHandlers}
       className={`rounded border bg-th-surface transition-shadow duration-300 [contain-intrinsic-size:auto_160px] [content-visibility:auto] ${
         highlighted || dragOver ? "border-blue-500 ring-2 ring-blue-500/60" : "border-th-border-muted"

@@ -832,10 +832,10 @@ export default function OntologyGraph({ onClose }: Props) {
   return (
     <div className="flex h-full flex-col bg-th-base" ref={containerRef} style={{ position: "relative" }}>
       {/* Toolbar */}
-      <div className="flex items-center gap-2 border-b border-th-border px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-th-border px-3 py-2">
         <h3 className="text-xs font-semibold text-th-fg">Ontology Graph</h3>
 
-        <div className="ml-4 flex items-center gap-3 text-2xs text-th-fg-3">
+        <div className="ml-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-th-fg-3">
           <span className="flex items-center gap-1.5">
             <svg width="14" height="14"><circle cx="7" cy="7" r="6" fill={V.classFill} stroke={V.classStroke} strokeWidth="1.5" /></svg>
             Class

@@ -1,6 +1,7 @@
 /**
- * Drag handle on a side pane's right edge (width state: usePaneWidth).
- * Double-click resets; when focused, ←/→ resize by 16 px (Shift: 64 px).
+ * Drag handle on a pane's edge (width state: usePaneWidth) — the right edge of
+ * a left-hand pane, or the left edge of a right-hand one (`edge="left"`).
+ * Double-click resets; when focused, ←/→ move the edge by 16 px (Shift: 64 px).
  */
 
 import type { usePaneWidth } from "./usePaneWidth";
@@ -8,10 +9,13 @@ import type { usePaneWidth } from "./usePaneWidth";
 interface Props {
   pane: ReturnType<typeof usePaneWidth>;
   label: string;
+  edge?: "right" | "left";
 }
 
-export default function ResizeHandle({ pane, label }: Props) {
+export default function ResizeHandle({ pane, label, edge = "right" }: Props) {
   const { width, setWidth, reset, min, max } = pane;
+  // Dragging the left edge rightwards narrows the pane
+  const sign = edge === "left" ? -1 : 1;
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
@@ -22,7 +26,7 @@ export default function ResizeHandle({ pane, label }: Props) {
     handle.setPointerCapture(e.pointerId);
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
-    const onMove = (ev: PointerEvent) => setWidth(startWidth + ev.clientX - startX);
+    const onMove = (ev: PointerEvent) => setWidth(startWidth + sign * (ev.clientX - startX));
     const onUp = () => {
       handle.removeEventListener("pointermove", onMove);
       handle.removeEventListener("pointerup", onUp);
@@ -47,10 +51,10 @@ export default function ResizeHandle({ pane, label }: Props) {
       onDoubleClick={reset}
       onKeyDown={(e) => {
         const step = e.shiftKey ? 64 : 16;
-        if (e.key === "ArrowLeft") { e.preventDefault(); setWidth(width - step); }
-        if (e.key === "ArrowRight") { e.preventDefault(); setWidth(width + step); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); setWidth(width - sign * step); }
+        if (e.key === "ArrowRight") { e.preventDefault(); setWidth(width + sign * step); }
       }}
-      className="absolute inset-y-0 -right-1 z-20 w-2 cursor-col-resize touch-none outline-none transition-colors hover:bg-blue-500/40 focus-visible:bg-blue-500/60 active:bg-blue-500/60"
+      className={`absolute inset-y-0 ${edge === "left" ? "-left-1" : "-right-1"} z-20 w-2 cursor-col-resize touch-none outline-none transition-colors hover:bg-blue-500/40 focus-visible:bg-blue-500/60 active:bg-blue-500/60`}
     />
   );
 }

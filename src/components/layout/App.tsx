@@ -3,44 +3,33 @@
  * Layout: sidebar (ontology list) + main panel (class/property editor)
  */
 
-import { lazy, Suspense, useEffect, useState, useCallback, useMemo, useRef, useDeferredValue } from "react";
+import { lazy, Suspense, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useStore, selectActiveOntology, flushPendingSaves } from "../../lib/store";
 import OntologyList from "./OntologyList";
-import ClassCard from "../core/ClassCard";
-import ClassForm from "../forms/ClassForm";
-import UnassignedProperties from "../core/UnassignedProperties";
-import OtherStatements from "../core/OtherStatements";
-import IndividualCard from "../core/IndividualCard";
+import ClassesView from "../core/ClassesView";
+import IndividualsView from "../core/IndividualsView";
 import ValidationPanel from "../core/ValidationPanel";
 import ClassBrowserPanel from "./ClassBrowserPanel";
 import Toast from "./Toast";
 import KeyboardHelp from "./KeyboardHelp";
-import TopBar, { type ViewMode } from "./TopBar";
+import TopBar from "./TopBar";
 import ResizeHandle from "./ResizeHandle";
 import { usePaneWidth } from "./usePaneWidth";
-import ErrorBoundary from "./ErrorBoundary";
-import ViewLoadError from "./ViewLoadError";
+import SplitPane from "./SplitPane";
+import ViewPane from "./ViewPane";
+import { isCardsMode, type CardsMode } from "./views";
+import { usePaneViews } from "./usePaneViews";
+import { useSourceSync } from "../../lib/source-sync";
 import HoverCardHost from "../hover/HoverCardHost";
 import DefinitionDrawer from "../hover/DefinitionDrawer";
 import { useReferences } from "../../lib/references/reference-store";
 import { validate } from "../../lib/validation";
-import { propertiesByDomain as propertiesByDomainOf, unassignedProperties } from "../../lib/selectors";
-import type { OntologyProperty } from "../../types";
-import { Plus, Sun, Moon, X, AlertTriangle, HelpCircle, Settings } from "lucide-react";
+import { unassignedProperties } from "../../lib/selectors";
+import { Sun, Moon, X, AlertTriangle, HelpCircle, Settings } from "lucide-react";
 import { applyDisplaySettings, openSettings, useSettings } from "../../lib/settings";
 import OntologyMetadataDrawer from "../dialogs/OntologyMetadataDrawer";
 
-// Heavy views are code-split: most sessions start (and stay) in the class list.
-const OntologyGraph = lazy(() => import("../graph/OntologyGraph"));
-const EntityGraph = lazy(() => import("../graph/EntityGraph"));
-const TreeGraph = lazy(() => import("../graph/TreeGraph"));
-const OntologyDiff = lazy(() => import("../core/OntologyDiff"));
 const SettingsDrawer = lazy(() => import("../settings/SettingsDrawer"));
-const SourceView = lazy(() => import("../source/SourceEditor").then((m) => ({ default: m.SourceView })));
-
-const viewFallback = (
-  <div className="flex h-full items-center justify-center text-xs text-th-fg-3">Loading view…</div>
-);
 
 /** Apply display settings (theme, text size, contrast, motion) and follow the OS theme when asked. */
 function useDisplaySettings() {
@@ -83,7 +72,8 @@ export default function App() {
 
   const [addingClass, setAddingClass] = useState(false);
   const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>("classes");
+  const views = usePaneViews();
+  const { primary: viewMode, secondary: sideView, selectView: setViewMode, showView, toggleSplit } = views;
   const [allExpanded, setAllExpanded] = useState(true);
   const [expandKey, setExpandKey] = useState(0); // forces re-render of cards with new default
   const [showValidation, setShowValidation] = useState(false);
@@ -110,6 +100,15 @@ export default function App() {
   // U8: Ref for scrolling to unassigned properties
   const unassignedRef = useRef<HTMLDivElement>(null);
   const otherStatementsRef = useRef<HTMLDivElement>(null);
+
+  // Selecting a class in the class browser shows it in the Source pane too
+  const sourceVisible = views.isVisible("source");
+  useEffect(() => {
+    if (!sourceVisible || !selectedClassId) return;
+    const uri = activeOntology?.classes.find((c) => c.id === selectedClassId)?.uri;
+    if (uri) useSourceSync.getState().revealInSource(uri);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- on selection only, not on every edit
+  }, [selectedClassId, sourceVisible]);
 
   const toggleClassBrowser = useCallback(() => {
     setClassBrowserCollapsed((prev) => {
@@ -148,6 +147,12 @@ export default function App() {
     const handler = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.altKey || e.defaultPrevented) return;
       const key = e.key.toLowerCase();
+      if (key === "\\") {
+        // Ctrl+\: open / close the side pane
+        e.preventDefault();
+        toggleSplit();
+        return;
+      }
       if (key === ",") {
         e.preventDefault();
         openSettings();
@@ -172,22 +177,22 @@ export default function App() {
           showToast("Select a class in the class browser first");
           return;
         }
-        setViewMode("classes");
+        showView("classes");
         setHighlightedClassId(classId);
         setAddPropertyRequest((prev) => ({ classId, n: (prev?.n ?? 0) + 1 }));
       } else if (key === "n") {
         e.preventDefault();
         setAddingClass(true);
-        setViewMode("classes");
+        showView("classes");
       } else if (key === "v" && clipboard) {
         e.preventDefault();
         pasteClipboard();
-        setViewMode("classes");
+        showView("classes");
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [undo, redo, clipboard, pasteClipboard, saveToFile, showToast]);
+  }, [undo, redo, clipboard, pasteClipboard, saveToFile, showToast, showView, toggleSplit]);
 
   // Write any debounced saves before the tab is hidden or closed.
   useEffect(() => {
@@ -213,62 +218,16 @@ export default function App() {
     [showToast, undo],
   );
 
-  // Per-class property lists are kept referentially stable across edits, so the
-  // memoised ClassCards only re-render when their own properties change.
-  const prevPropertiesByDomain = useRef(new Map<string, OntologyProperty[]>());
-  const propertiesByDomain = useMemo(() => {
-    const next = activeOntology ? propertiesByDomainOf(activeOntology) : new Map<string, OntologyProperty[]>();
-    for (const [classId, list] of next) {
-      const prev = prevPropertiesByDomain.current.get(classId);
-      if (prev && prev.length === list.length && prev.every((p, i) => p === list[i])) next.set(classId, prev);
-    }
-    prevPropertiesByDomain.current = next;
-    return next;
-  }, [activeOntology?.classes, activeOntology?.properties]); // eslint-disable-line react-hooks/exhaustive-deps -- only these two arrays feed the grouping
-
   // U4: Auto-running validation
   const validationIssues = useMemo(
     () => (activeOntology ? validate(activeOntology) : []),
     [activeOntology]
   );
 
-  // One per subject block in the Other statements panel (blank nodes nested in
-  // another statement don't get their own block)
-  const otherStatementCount = useMemo(() => {
-    const triples = activeOntology?.unmappedTriples ?? [];
-    const referenced = new Set(triples.filter((t) => !t.isLiteral).map((t) => t.object));
-    return new Set(triples.filter((t) => !t.subject.startsWith("_:") || !referenced.has(t.subject)).map((t) => t.subject)).size;
-  }, [activeOntology?.unmappedTriples]);
-
   const unassignedCount = useMemo(
     () => (activeOntology ? unassignedProperties(activeOntology).length : 0),
     [activeOntology],
   );
-
-  // Filtering/sorting runs against a deferred copy of the query so typing stays
-  // responsive on large ontologies.
-  const deferredSearch = useDeferredValue(search.trim().toLowerCase());
-  const sortedClasses = useMemo(() => {
-    const classes = activeOntology?.classes ?? [];
-    // A class matches on its own labels/local name or on any property nested under it
-    const hit = (localName: string, labels: { value: string }[]) =>
-      localName.toLowerCase().includes(deferredSearch) ||
-      labels.some((l) => l.value.toLowerCase().includes(deferredSearch));
-    const matches = deferredSearch
-      ? classes.filter((cls) =>
-          hit(cls.localName, cls.labels) ||
-          (propertiesByDomain.get(cls.id) ?? []).some((p) => hit(p.localName, p.labels)))
-      : classes;
-    return [...matches].sort((a, b) => a.localName.localeCompare(b.localName));
-  }, [activeOntology?.classes, propertiesByDomain, deferredSearch]);
-  const sortedIndividuals = useMemo(() => {
-    const individuals = activeOntology?.individuals ?? [];
-    const matches = deferredSearch
-      ? individuals.filter((ind) =>
-          ind.localName.toLowerCase().includes(deferredSearch) || ind.uri.toLowerCase().includes(deferredSearch))
-      : individuals;
-    return [...matches].sort((a, b) => a.localName.localeCompare(b.localName));
-  }, [activeOntology?.individuals, deferredSearch]);
 
   if (!initialized) {
     return (
@@ -278,9 +237,22 @@ export default function App() {
     );
   }
 
-  const classes = activeOntology?.classes ?? [];
-  const individuals = activeOntology?.individuals ?? [];
-
+  const renderCards = (mode: CardsMode) => mode === "classes" ? (
+    <ClassesView
+      search={search}
+      allExpanded={allExpanded}
+      expandKey={expandKey}
+      highlightedClassId={highlightedClassId}
+      addingClass={addingClass}
+      setAddingClass={setAddingClass}
+      addPropertyRequest={addPropertyRequest}
+      onDelete={handleEntityDeleted}
+      unassignedRef={unassignedRef}
+      otherStatementsRef={otherStatementsRef}
+    />
+  ) : (
+    <IndividualsView search={search} allExpanded={allExpanded} expandKey={expandKey} />
+  );
 
   return (
     <div className="flex h-screen overflow-hidden bg-th-base font-sans text-th-fg">
@@ -332,7 +304,7 @@ export default function App() {
           <ClassBrowserPanel
             onSelectClass={setSelectedClassId}
             onDoubleClickClass={(id) => {
-              setViewMode("classes");
+              showView("classes");
               setHighlightedClassId(id);
             }}
             selectedClassId={selectedClassId}
@@ -360,6 +332,9 @@ export default function App() {
               unassignedCount={unassignedCount}
               onShowUnassigned={() => unassignedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
               onShowMetadata={() => setShowMetadata(true)}
+              splitOpen={sideView !== null}
+              onToggleSplit={toggleSplit}
+              cardsVisible={isCardsMode(viewMode) || isCardsMode(sideView)}
             />
 
             {/* Validation panel */}
@@ -396,128 +371,28 @@ export default function App() {
               </div>
             )}
 
-            {/* Content: graph, entity-graph, diff, source, classes, or individuals — a failing view doesn't take down the app */}
-            <ErrorBoundary resetKey={viewMode} fallback={(error) => <div className="flex-1 overflow-auto"><ViewLoadError error={error} /></div>}>
-            {viewMode === "diff" ? (
-              <div className="relative flex-1 overflow-hidden">
-                <Suspense fallback={viewFallback}><OntologyDiff /></Suspense>
+            {/* The main view, and optionally any other view beside it (split) */}
+            <div className="flex min-h-0 flex-1">
+              <div className="flex min-w-0 flex-1 flex-col">
+                <ViewPane
+                  mode={viewMode}
+                  onClose={() => setViewMode("classes")}
+                  syncWithSource={sideView === "source"}
+                  renderCards={renderCards}
+                />
               </div>
-            ) : viewMode === "graph" ? (
-              <div className="relative flex-1 overflow-hidden">
-                <Suspense fallback={viewFallback}><OntologyGraph onClose={() => setViewMode("classes")} /></Suspense>
-              </div>
-            ) : viewMode === "source" ? (
-              <div className="relative flex-1 overflow-hidden">
-                <Suspense fallback={viewFallback}><SourceView /></Suspense>
-              </div>
-            ) : viewMode === "tree" ? (
-              <div className="relative flex-1 overflow-hidden">
-                <Suspense fallback={viewFallback}><TreeGraph onClose={() => setViewMode("classes")} /></Suspense>
-              </div>
-            ) : viewMode === "entity-graph" ? (
-              <div className="relative flex-1 overflow-hidden">
-                <Suspense fallback={viewFallback}><EntityGraph /></Suspense>
-              </div>
-            ) : viewMode === "individuals" ? (
-              <div className="flex-1 overflow-y-auto px-4 py-3">
-                <div className="mx-auto w-full max-w-5xl">
-                  {/* Stats */}
-                  <div className="mb-3 flex items-center gap-3 text-2xs text-th-fg-3">
-                    <span>{individuals.length} individuals</span>
-                    <span>{classes.length} classes</span>
-                  </div>
-
-                  {/* Individual cards */}
-                  <div className="space-y-2">
-                    {sortedIndividuals.map((ind) => (
-                      <IndividualCard
-                        key={`${ind.id}-${expandKey}`}
-                        individual={ind}
-                        defaultExpanded={allExpanded}
-                      />
-                    ))}
-                  </div>
-
-                  {sortedIndividuals.length === 0 && (
-                    <p className="mt-8 text-center text-sm text-th-fg-4">
-                      {search
-                        ? "No individuals match that filter."
-                        : "No individuals found. Import a .ttl file with instance data to see them here."}
-                    </p>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1 overflow-y-auto px-4 py-3">
-                <div className="mx-auto w-full max-w-5xl">
-                  {/* Stats */}
-                  <div className="mb-3 flex items-center gap-3 text-2xs text-th-fg-3">
-                    <span>{classes.length} classes</span>
-                    <span>{activeOntology.properties.length} properties</span>
-                    {individuals.length > 0 && (
-                      <span className="text-purple-500">
-                        {individuals.length} individuals
-                      </span>
-                    )}
-                    {otherStatementCount > 0 && (
-                      <button
-                        onClick={() =>
-                          otherStatementsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-                        }
-                        className="rounded hover:text-th-fg-2 hover:underline"
-                        title="Statements about subjects that aren't entities of this ontology"
-                      >
-                        {otherStatementCount} other statement{otherStatementCount === 1 ? "" : "s"} →
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Add class form or button */}
-                  {addingClass ? (
-                    <div className="mb-3">
-                      <ClassForm onDone={() => setAddingClass(false)} />
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setAddingClass(true)}
-                      className="mb-3 flex items-center gap-1 text-xs text-th-fg-3 hover:text-blue-400"
-                    >
-                      <Plus size={13} />
-                      Add class
-                    </button>
-                  )}
-
-                  {/* Class cards */}
-                  <div className="space-y-2">
-                    {sortedClasses.map((cls) => (
-                      <ClassCard
-                        key={`${cls.id}-${expandKey}`}
-                        cls={cls}
-                        properties={propertiesByDomain.get(cls.id) ?? []}
-                        defaultExpanded={allExpanded}
-                        highlighted={highlightedClassId === cls.id}
-                        onDelete={handleEntityDeleted}
-                        search={deferredSearch}
-                        addPropertyRequest={addPropertyRequest?.classId === cls.id ? addPropertyRequest.n : 0}
-                      />
-                    ))}
-                  </div>
-
-                  {sortedClasses.length === 0 && !addingClass && (
-                    <p className="mt-8 text-center text-sm text-th-fg-4">
-                      {search ? "No classes match that filter." : "No classes yet. Add one above."}
-                    </p>
-                  )}
-
-                  {/* U8: Unassigned properties with forwardRef */}
-                  <div ref={unassignedRef}>
-                    <UnassignedProperties />
-                  </div>
-                  <OtherStatements ref={otherStatementsRef} />
-                </div>
-              </div>
-            )}
-            </ErrorBoundary>
+              {sideView && (
+                <SplitPane mode={sideView} primary={viewMode} onPick={views.pickSecondary} onClose={views.closeSplit}>
+                  <ViewPane
+                    mode={sideView}
+                    embedded
+                    onClose={views.closeSplit}
+                    syncWithSource={viewMode === "source"}
+                    renderCards={renderCards}
+                  />
+                </SplitPane>
+              )}
+            </div>
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center">

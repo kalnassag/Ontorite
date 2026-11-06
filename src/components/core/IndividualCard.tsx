@@ -168,7 +168,7 @@ export default function IndividualCard({ individual, defaultExpanded = false }: 
   };
 
   return (
-    <div className="rounded border border-th-border-muted bg-th-surface">
+    <div className="rounded border border-th-border-muted bg-th-surface" data-entity-uri={individual.uri}>
       {/* Header */}
       <div className="flex items-start gap-1">
         <button
