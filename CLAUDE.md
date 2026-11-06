@@ -112,7 +112,7 @@ Each property has:
    then regenerated, so formatting and `#` comments are **not** kept (agreed trade-off;
    the editor flags comments inline). Keeping comments would need per-entity comment
    anchoring in the model — a possible follow-up, not a reason to make text the
-   source of truth. It can sit beside the class / individual view (split, `Ctrl+\`):
+   source of truth. Beside the class / individual cards (split view, either side):
    clicking a card reveals its block, the cursor's block outlines its card
    (`lib/source-sync.ts`, blocks found by `lib/turtle-outline.ts` — a line scan, so it
    works on unapplied and invalid text). Cards carry `data-entity-uri` for this.
@@ -148,9 +148,13 @@ src/
     layout/   App (root layout + shortcuts), TopBar (title, file, view tabs, actions —
               never clips: labels → icons → wrap, measured), OntologyList (sidebar),
               ClassBrowserPanel, ResizeHandle + usePaneWidth (resizable panes),
-              SplitSourcePane + useSourceCardSync (Source beside the cards),
+              split view: ViewPane (renders any view), SplitPane (side pane + its
+              view picker), usePaneViews (which view each pane shows; never the
+              same in both — picking the other pane's view swaps), views.ts,
+              useSourceCardSync (cards ↔ Source follow each other),
               Drawer, Toast, KeyboardHelp, ErrorBoundary, ViewLoadError
-    core/     ClassCard, PropertyRow, IndividualCard, UnassignedProperties,
+    core/     ClassesView, IndividualsView (the card lists, usable in either pane),
+              ClassCard, PropertyRow, IndividualCard, UnassignedProperties,
               TurtleStatementList (an entity's "Other axioms" as Turtle),
               OtherStatements (subject-less statements), ClassHierarchyTree,
               ValidationPanel, OntologyDiff, ImportExport, TimestampFooter
@@ -287,7 +291,7 @@ src/
 15. **Keyboard shortcuts**
     - `Ctrl+N` new class, `Ctrl+Shift+N` new property, `Ctrl+S` export, `Ctrl+Z` undo
     - In the Source view: `Ctrl+Enter` apply, `Ctrl+S` apply then save, `Ctrl+F` find
-    - `Ctrl+\` Source side by side with the cards, `Ctrl+,` Settings
+    - `Ctrl+\` split view (a second view side by side), `Ctrl+,` Settings
 
 ## Import Requirements
 

@@ -8,16 +8,16 @@
  *
  * Unapplied text survives switching views (kept per ontology for the session).
  *
- * Beside the class view (split), it follows the cards: a clicked entity's
- * block is revealed here, and the block under the cursor is reported back
- * (lib/source-sync.ts).
+ * Next to the class / individual cards (split view), it follows them: a
+ * clicked entity's block is revealed here, and the block under the cursor
+ * is reported back (lib/source-sync.ts).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorView } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import type { Completion } from "@codemirror/autocomplete";
-import { AlertCircle, CheckCircle2, RotateCcw, Play, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, RotateCcw, Play } from "lucide-react";
 import { useStore, selectActiveOntology } from "../../lib/store";
 import { serializeToTurtle } from "../../lib/turtle-serializer";
 import { applyTurtleSource, describeSummary, type ApplySummary } from "../../lib/source-apply";
@@ -42,11 +42,11 @@ const removedCount = (s: ApplySummary) => s.classes.removed.length + s.propertie
 
 interface Props {
   ontology: Ontology;
-  /** Beside the class view: don't take focus on open; show a close button */
-  split?: { onClose: () => void };
+  /** In the split view's side pane: don't take focus when it opens */
+  embedded?: boolean;
 }
 
-export default function SourceEditor({ ontology, split }: Props) {
+export default function SourceEditor({ ontology, embedded = false }: Props) {
   const replaceOntologyContent = useStore((s) => s.replaceOntologyContent);
   const saveToFile = useStore((s) => s.saveToFile);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -175,7 +175,7 @@ export default function SourceEditor({ ontology, split }: Props) {
     });
     viewRef.current = view;
     setCommentCount(findComments(initial).length);
-    if (!split) view.focus();
+    if (!embedded) view.focus();
     return () => { view.destroy(); viewRef.current = null; setCursorUri(null); };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- created once; later model changes are synced below
   }, []);
@@ -218,11 +218,6 @@ export default function SourceEditor({ ontology, split }: Props) {
           >
             <Play size={11} /> Apply
           </button>
-          {split && (
-            <button onClick={split.onClose} className="rounded p-1 text-th-fg-3 hover:bg-th-hover hover:text-th-fg" title="Close side-by-side source (Ctrl+\)" aria-label="Close side-by-side source">
-              <X size={13} />
-            </button>
-          )}
         </div>
       </div>
 
@@ -273,8 +268,8 @@ function Banner({ tone, children }: { tone: "amber" | "red"; children: React.Rea
 }
 
 /** Wrapper that keys the editor by ontology, so switching ontologies starts a fresh buffer. */
-export function SourceView({ split }: { split?: Props["split"] }) {
+export function SourceView({ embedded }: { embedded?: boolean }) {
   const ontology = useStore(selectActiveOntology);
   if (!ontology) return null;
-  return <SourceEditor key={ontology.id} ontology={ontology} split={split} />;
+  return <SourceEditor key={ontology.id} ontology={ontology} embedded={embedded} />;
 }
