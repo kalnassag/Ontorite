@@ -8,7 +8,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  AlertCircle, AlertTriangle, ChevronsDown, ChevronsUp, Clipboard, FileCode, FileText, GitCompare, GitFork,
+  AlertCircle, AlertTriangle, ChevronsDown, Columns2, ChevronsUp, Clipboard, FileCode, FileText, GitCompare, GitFork,
   Info, Layers, Network, PanelLeftClose, PanelLeftOpen, RotateCcw, RotateCw, Share2, ShieldCheck, Users, X,
   type LucideIcon,
 } from "lucide-react";
@@ -48,6 +48,9 @@ interface Props {
   unassignedCount: number;
   onShowUnassigned: () => void;
   onShowMetadata: () => void;
+  /** Source editor beside the class / individual view */
+  splitSource: boolean;
+  onToggleSplit: () => void;
 }
 
 export default function TopBar(props: Props) {
@@ -97,7 +100,7 @@ export default function TopBar(props: Props) {
       setMode("full"); // grown enough: try labels on one row again (re-measured next render)
     }
     // Re-check when the width or anything that changes the bar's content changes
-  }, [width, mode, clipboard, viewMode, validationIssues.length, props.unassignedCount, ontology?.metadata.ontologyLabel]);
+  }, [width, mode, clipboard, viewMode, validationIssues.length, props.unassignedCount, ontology?.metadata.ontologyLabel, props.splitSource]);
 
   if (!ontology) return null;
   const errors = validationIssues.filter((i) => i.severity === "error").length;
@@ -163,6 +166,21 @@ export default function TopBar(props: Props) {
           </button>
         ))}
       </div>
+
+      {(viewMode === "classes" || viewMode === "individuals") && (
+        <button
+          onClick={props.onToggleSplit}
+          aria-pressed={props.splitSource}
+          aria-label="Source side by side"
+          className={`flex items-center gap-1 rounded px-1.5 py-1 text-2xs font-medium ${
+            props.splitSource ? "bg-blue-600/15 text-blue-700 dark:text-blue-300" : "text-th-fg-3 hover:bg-th-hover hover:text-th-fg"
+          }`}
+          title={props.splitSource ? "Close the Source editor beside the cards (Ctrl+\\)" : "Edit the Turtle source side by side with the cards (Ctrl+\\)"}
+        >
+          <Columns2 size={13} />
+          {!compact && "Split"}
+        </button>
+      )}
 
       {(viewMode === "classes" || viewMode === "individuals") && (
         <button onClick={props.onToggleExpandAll} className={iconButton} title={props.allExpanded ? "Collapse all" : "Expand all"}>

@@ -161,3 +161,11 @@
       text-prop-annotation-500 ring-1 ring-inset ring-prop-annotation-500/25;
   }
 }
+
+/* The card the Source cursor is in (split view, lib/source-sync.ts) — an outline,
+   not an animation, so it shows with reduced motion too */
+.entity-flash {
+  outline: 2px solid rgb(59 130 246 / 0.7);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}

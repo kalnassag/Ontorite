@@ -18,6 +18,9 @@ import KeyboardHelp from "./KeyboardHelp";
 import TopBar, { type ViewMode } from "./TopBar";
 import ResizeHandle from "./ResizeHandle";
 import { usePaneWidth } from "./usePaneWidth";
+import SplitSourcePane from "./SplitSourcePane";
+import { useSourceCardSync } from "./useSourceCardSync";
+import { useSourceSync } from "../../lib/source-sync";
 import ErrorBoundary from "./ErrorBoundary";
 import ViewLoadError from "./ViewLoadError";
 import HoverCardHost from "../hover/HoverCardHost";
@@ -89,6 +92,10 @@ export default function App() {
   const [showValidation, setShowValidation] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [highlightedClassId, setHighlightedClassId] = useState<string | null>(null);
+  // Source editor beside the class / individual view (remembered per device)
+  const [splitSource, setSplitSource] = useState(() => {
+    try { return localStorage.getItem("splitSource") === "true"; } catch { return false; }
+  });
   const [classBrowserCollapsed, setClassBrowserCollapsed] = useState(() => {
     return localStorage.getItem("classBrowserCollapsed") === "true";
   });
@@ -110,6 +117,27 @@ export default function App() {
   // U8: Ref for scrolling to unassigned properties
   const unassignedRef = useRef<HTMLDivElement>(null);
   const otherStatementsRef = useRef<HTMLDivElement>(null);
+
+  const splitActive = splitSource && (viewMode === "classes" || viewMode === "individuals");
+  const cardsRef = useRef<HTMLDivElement>(null);
+  const onCardClick = useSourceCardSync(cardsRef, splitActive);
+  const toggleSplit = useCallback(() => {
+    setSplitSource((prev) => {
+      const next = !prev;
+      try { localStorage.setItem("splitSource", String(next)); } catch { /* not remembered */ }
+      return next;
+    });
+  }, []);
+  const toggleSplitRef = useRef({ toggleSplit, viewMode, splitSource });
+  toggleSplitRef.current = { toggleSplit, viewMode, splitSource };
+
+  // Selecting a class in the class browser shows it in the Source pane too
+  useEffect(() => {
+    if (!splitActive || !selectedClassId) return;
+    const uri = activeOntology?.classes.find((c) => c.id === selectedClassId)?.uri;
+    if (uri) useSourceSync.getState().revealInSource(uri);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- on selection only, not on every edit
+  }, [selectedClassId, splitActive]);
 
   const toggleClassBrowser = useCallback(() => {
     setClassBrowserCollapsed((prev) => {
@@ -148,6 +176,18 @@ export default function App() {
     const handler = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.altKey || e.defaultPrevented) return;
       const key = e.key.toLowerCase();
+      if (key === "\\") {
+        // Ctrl+\: Source beside the cards (from another view: go to Classes, split)
+        e.preventDefault();
+        const { toggleSplit: toggle, viewMode: mode, splitSource: on } = toggleSplitRef.current;
+        if (mode !== "classes" && mode !== "individuals") {
+          setViewMode("classes");
+          if (!on) toggle();
+        } else {
+          toggle();
+        }
+        return;
+      }
       if (key === ",") {
         e.preventDefault();
         openSettings();
@@ -360,6 +400,8 @@ export default function App() {
               unassignedCount={unassignedCount}
               onShowUnassigned={() => unassignedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
               onShowMetadata={() => setShowMetadata(true)}
+              splitSource={splitSource}
+              onToggleSplit={toggleSplit}
             />
 
             {/* Validation panel */}
@@ -397,6 +439,8 @@ export default function App() {
             )}
 
             {/* Content: graph, entity-graph, diff, source, classes, or individuals — a failing view doesn't take down the app */}
+            <div className="flex min-h-0 flex-1">
+            <div ref={cardsRef} onClick={onCardClick} className="flex min-w-0 flex-1 flex-col">
             <ErrorBoundary resetKey={viewMode} fallback={(error) => <div className="flex-1 overflow-auto"><ViewLoadError error={error} /></div>}>
             {viewMode === "diff" ? (
               <div className="relative flex-1 overflow-hidden">
@@ -518,6 +562,9 @@ export default function App() {
               </div>
             )}
             </ErrorBoundary>
+            </div>
+            {splitActive && <SplitSourcePane onClose={toggleSplit} />}
+            </div>
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center">

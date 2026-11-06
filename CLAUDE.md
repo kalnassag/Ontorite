@@ -112,7 +112,10 @@ Each property has:
    then regenerated, so formatting and `#` comments are **not** kept (agreed trade-off;
    the editor flags comments inline). Keeping comments would need per-entity comment
    anchoring in the model — a possible follow-up, not a reason to make text the
-   source of truth.
+   source of truth. It can sit beside the class / individual view (split, `Ctrl+\`):
+   clicking a card reveals its block, the cursor's block outlines its card
+   (`lib/source-sync.ts`, blocks found by `lib/turtle-outline.ts` — a line scan, so it
+   works on unapplied and invalid text). Cards carry `data-entity-uri` for this.
 
 6. **Imports are references, never merged.** `owl:imports` is edited in the metadata
    drawer and exported as full IRIs. External ontologies (gist, dcat, dcterms…) live
@@ -144,7 +147,8 @@ src/
   components/
     layout/   App (root layout + shortcuts), TopBar (title, file, view tabs, actions —
               never clips: labels → icons → wrap, measured), OntologyList (sidebar),
-              ClassBrowserPanel, ResizeHandle + usePaneWidth (resizable side panes),
+              ClassBrowserPanel, ResizeHandle + usePaneWidth (resizable panes),
+              SplitSourcePane + useSourceCardSync (Source beside the cards),
               Drawer, Toast, KeyboardHelp, ErrorBoundary, ViewLoadError
     core/     ClassCard, PropertyRow, IndividualCard, UnassignedProperties,
               TurtleStatementList (an entity's "Other axioms" as Turtle),
@@ -156,7 +160,8 @@ src/
     settings/ SettingsDrawer (lazy; tabs: Library, New ontologies, Display &
               accessibility, Data), LibrarySettings + LibraryCatalog, Choice
     graph/    OntologyGraph (force), TreeGraph (hierarchy), EntityGraph (neighbourhood)
-    source/   SourceEditor (Turtle editing view), turtle-editor-setup (CodeMirror config)
+    source/   SourceEditor (Turtle editing view), turtle-editor-setup (CodeMirror config),
+              block-highlight (reveal + highlight a block)
     hover/    ClassHover (wrap any class / property name) + HoverCardHost (the single
               app-wide hover card, mounted once in App; state in lib/hover-card.ts),
               DefinitionDrawer (a term's full definition from its source, as linked
@@ -172,6 +177,8 @@ src/
     raw-triples.ts        blank-node ownership, routing, renaming, relabelling
     source-apply.ts       reconcile edited Turtle into the model (Source view)
     turtle-comments.ts    find `#` comments (outside IRIs/strings) to warn about
+    turtle-outline.ts     subject blocks of Turtle text by offset (split-view sync)
+    source-sync.ts        split view: reveal-in-source requests, entity under the cursor
     class-refs.ts         resolve picker text to class IRIs; create unknown classes
     references/           the user's library of read-only external ontologies:
                           catalog (common ontologies to add), reference-source (index,
@@ -280,6 +287,7 @@ src/
 15. **Keyboard shortcuts**
     - `Ctrl+N` new class, `Ctrl+Shift+N` new property, `Ctrl+S` export, `Ctrl+Z` undo
     - In the Source view: `Ctrl+Enter` apply, `Ctrl+S` apply then save, `Ctrl+F` find
+    - `Ctrl+\` Source side by side with the cards, `Ctrl+,` Settings
 
 ## Import Requirements
 
